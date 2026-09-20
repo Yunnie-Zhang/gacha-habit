@@ -3,7 +3,11 @@
     "allow": [
       "Bash(npm i *)",
       "Read(//c/Program Files \\\\\\(x86\\\\\\)/Microsoft/Edge/Application/**)",
-      "Read(//c/Program Files/Google/Chrome/Application/**)"
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Bash(sed '1d;$d')",
+      "Bash(node --check /tmp/rings-check.js)",
+      "Bash(npm run *)",
+      "Bash(node scripts/smoke.mjs)"
     ]
   }
 }

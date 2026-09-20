@@ -11,14 +11,29 @@ import { burst, quake, sparkTrail, tipPop } from '../lib/fx';
 import { playPop, playReveal, tick, unlockAudio } from '../lib/sound';
 import { todayStr } from '../lib/date';
 
-const GROW_MS = 2200; // 卡片生长时长（慢速留悬念）
+const GROW_MS = 2200; // 一段生长时长（慢速留悬念：0 → 悬念位）
+const PAUSE_MS = 300; // 长到悬念位后的停顿
+const ADJUST_MS = 600; // 二段增/缩时长（悬念位 → 真实分位）
 const VANISH_MS = 320; // 点按后卡片消失时长
 const HOLD_MS = 1000; // 分数揭晓后原地停留时长
+
+const MONTHS_EN = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** 页头日期，与设计稿一致："Mon, 21 September" */
+export function enDate(): string {
+  const d = new Date();
+  const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+  return `${wd}, ${d.getDate()} ${MONTHS_EN[d.getMonth()]}`;
+}
 
 interface Anim {
   id: string;
   mode: 'checkin' | 'giveup';
   score: number;
+  decoy: number; // 一段生长的悬念位（区间内随机数）
 }
 
 /** 卡片目标长度：最小 55% 宽（小分也尽量长），最大横贯全宽不超出屏幕 */
@@ -28,26 +43,20 @@ function bandWidth(p: Project, score: number, mode: 'checkin' | 'giveup', wrapW:
   return Math.round(minW + frac * (wrapW - minW));
 }
 
-const MONTHS_EN = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
-/** 页头日期，与设计稿一致："Mon, 21 September" */
-function enDate(): string {
-  const d = new Date();
-  const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
-  return `${wd}, ${d.getDate()} ${MONTHS_EN[d.getMonth()]}`;
+/** 悬念位：区间内再摇一个随机数，尽量避开真实分，保证二段还有增/缩位移 */
+function decoyScore(p: Project, mode: 'checkin' | 'giveup', score: number): number {
+  const lo = mode === 'checkin' ? p.posMin : (p.negMin ?? 0);
+  const hi = mode === 'checkin' ? p.posMax : (p.negMax ?? 0);
+  if (hi <= lo) return score; // 固定分：没有悬念位
+  let v = randInt(lo, hi);
+  for (let i = 0; i < 8 && v === Math.abs(score); i++) v = randInt(lo, hi);
+  return mode === 'checkin' ? v : -v;
 }
 
 export function TodayView() {
   const projects = useStore((s) => s.projects);
-  const tags = useStore((s) => s.tags);
   const checkins = useStore((s) => s.checkins);
   const commitCheckin = useStore((s) => s.commitCheckin);
-  const soundOn = useStore((s) => s.soundOn);
-  const toggleSound = useStore((s) => s.toggleSound);
-  const [filter, setFilter] = useState('all');
   const [confirm, setConfirm] = useState<{ text: string; cb: () => void } | null>(null);
   const [anim, setAnim] = useState<Anim | null>(null);
   const [wrapW, setWrapW] = useState(0);
@@ -70,9 +79,8 @@ export function TodayView() {
     const i = projects.findIndex((x) => x.id === p.id);
     return BAND_PALETTE[(i < 0 ? 0 : i) % BAND_PALETTE.length];
   };
-  const list = act.filter((p) => filter === 'all' || p.tagIds.includes(filter));
-  const todo = list.filter((p) => !recOf(p) || recOf(p)!.status === 'rest');
-  const finished = list
+  const todo = act.filter((p) => !recOf(p) || recOf(p)!.status === 'rest');
+  const finished = act
     .filter((p) => recOf(p) && recOf(p)!.status !== 'rest')
     .sort((a, b) => recOf(b)!.score - recOf(a)!.score); // 完成卡按分数从大到小往下排
 
@@ -84,7 +92,7 @@ export function TodayView() {
     return () => window.removeEventListener('resize', measure);
   }, []);
 
-  // 打卡/认输动画：卡片消失 → 从左（认输从右）重新长出，终端迸星，揭晓时落账
+  // 打卡/认输动画：卡片消失 → 先长到区间内随机悬念位，停顿后再增/缩到真实分位，终端迸星，揭晓时落账
   useEffect(() => {
     if (!anim) return;
     const el = els.current.get(anim.id)!;
@@ -140,6 +148,7 @@ export function TodayView() {
 
     const dir: 1 | -1 = anim.mode === 'checkin' ? 1 : -1;
     const target = bandWidth(p, anim.score, anim.mode, wrapW);
+    const decoyW = bandWidth(p, anim.decoy, anim.mode, wrapW);
     const timers: number[] = [];
     playPop();
     const vanish = el.animate(
@@ -151,7 +160,8 @@ export function TodayView() {
         vanish.cancel();
         el.style.width = '0px';
         void el.offsetWidth; // 锁定起点，保证从 0 长出
-        const grow = el.animate([{ width: '0px' }, { width: `${target}px` }], {
+        // 一段：长到悬念位（区间内随机数）
+        const grow1 = el.animate([{ width: '0px' }, { width: `${decoyW}px` }], {
           duration: GROW_MS,
           easing: 'cubic-bezier(.3,.6,.2,1)',
           fill: 'forwards',
@@ -163,14 +173,34 @@ export function TodayView() {
           const prog = i / (N - 1);
           timers.push(window.setTimeout(() => tick(prog), GROW_MS * 0.92 * (1 - Math.pow(1 - prog, 1.8))));
         }
+        // 停顿 0.3s 后二段：增/缩到真实分位，随即揭晓（迸星不变）
         timers.push(
           window.setTimeout(
             () => {
-              grow.cancel();
-              el.style.width = `${target}px`;
-              reveal();
+              grow1.cancel();
+              el.style.width = `${decoyW}px`;
+              if (Math.abs(target - decoyW) < 1) {
+                reveal(); // 悬念位恰为真实分位（固定分等）：停顿后直接揭晓
+                return;
+              }
+              const grow2 = el.animate([{ width: `${decoyW}px` }, { width: `${target}px` }], {
+                duration: ADJUST_MS,
+                easing: 'cubic-bezier(.3,.7,.3,1)',
+                fill: 'forwards',
+              });
+              sparkTrail(el, dir, ADJUST_MS);
+              timers.push(
+                window.setTimeout(
+                  () => {
+                    grow2.cancel();
+                    el.style.width = `${target}px`;
+                    reveal();
+                  },
+                  ADJUST_MS + 20,
+                ),
+              );
             },
-            GROW_MS + 20,
+            GROW_MS + PAUSE_MS,
           ),
         );
       }, VANISH_MS),
@@ -207,7 +237,7 @@ export function TodayView() {
     unlockAudio();
     const score =
       mode === 'checkin' ? randInt(p.posMin, p.posMax) : -randInt(p.negMin ?? 0, p.negMax ?? 0);
-    setAnim({ id: p.id, mode, score });
+    setAnim({ id: p.id, mode, score, decoy: decoyScore(p, mode, score) });
   };
 
   const bindRef = (id: string) => (el: HTMLDivElement | null) => {
@@ -217,35 +247,10 @@ export function TodayView() {
   };
 
   return (
-    <div className="today-page">
-      <header className="t-hd">
-        <div className="t-hd-in">
-          <div>
-            <div className="hi">
-              hi，<em>Yunnie</em>
-            </div>
-            <div className="t-dt">{enDate()}</div>
-          </div>
-          <div className="t-hd-r">
-            <button
-              className="icobtn"
-              onClick={() => {
-                toggleSound();
-                if (!soundOn) unlockAudio();
-              }}
-              aria-label="音效开关"
-              title="音效开关"
-            >
-              <Icon name={soundOn ? 'sound' : 'mute'} size={17} />
-            </button>
-            <div className="t-avatar">Y</div>
-          </div>
-        </div>
-      </header>
-
-      <div className="t-sheet">
-        <div className="t-sheet-in">
+    <div className="t-sheet">
+      <div className="t-sheet-in">
           <div className="t-card">
+            <div className="t-grab" aria-hidden="true" />
             <div className="lb">今日分数</div>
             <div className="num" ref={heroNumRef}>
               <CountUp value={total} />
@@ -255,22 +260,10 @@ export function TodayView() {
             </div>
           </div>
 
-          <div className="filter-row">
-        <button className={`chip ${filter === 'all' ? 'sel' : ''}`} onClick={() => setFilter('all')}>
-          全部
-        </button>
-        {tags.map((t) => (
-          <button key={t.id} className={`chip ${filter === t.id ? 'sel' : ''}`} onClick={() => setFilter(t.id)}>
-            <i style={{ background: t.color }} />
-            {t.name}
-          </button>
-        ))}
-      </div>
-
-      <div className="stack" ref={stackRef}>
+          <div className="stack" ref={stackRef}>
         {todo.length + finished.length === 0 && (
           <div className="empty-note">
-            {projects.length ? '这个筛选下没有项目' : '还没有项目，去「管理」页新建一个'}
+            {projects.length ? '今天没有安排项目' : '还没有项目，去「管理」页新建一个'}
           </div>
         )}
         {todo.map((p) => (
@@ -320,7 +313,6 @@ export function TodayView() {
               onNo={() => setConfirm(null)}
             />
           )}
-        </div>
       </div>
     </div>
   );
