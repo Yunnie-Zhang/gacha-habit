@@ -53,8 +53,16 @@ export function ProjectForm({ editing, onClose }: { editing: Project | null; onC
   };
 
   const addNewTag = () => {
-    const t = useStore.getState().addTag(newTag);
-    if (t) setTagIds((s) => new Set(s).add(t.id));
+    const name = newTag.trim();
+    if (!name) return;
+    // 已存在的标签直接选中，不重复创建
+    const existing = tags.find((t) => t.name === name);
+    if (existing) {
+      setTagIds((s) => new Set(s).add(existing.id));
+    } else {
+      const t = useStore.getState().addTag(name);
+      if (t) setTagIds((s) => new Set(s).add(t.id));
+    }
     setNewTag('');
   };
 
@@ -79,7 +87,7 @@ export function ProjectForm({ editing, onClose }: { editing: Project | null; onC
       </div>
 
       <div className="f-row">
-        <label>标签（可多选）</label>
+        <label>标签（可多选 · 点上方胶囊选中已保存的标签）</label>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {tags.map((t) => (
             <button
