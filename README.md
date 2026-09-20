@@ -32,6 +32,13 @@ git remote add origin https://github.com/<你的用户名>/<仓库名>.git
 git push -u origin main
 ```
 
+## 安装到手机（PWA）
+
+- **Android**：Chrome 打开线上地址 → 地址栏「安装」/ 菜单 →「添加到主屏幕」
+- **iOS**：Safari 打开线上地址 → 分享 →「添加到主屏幕」
+
+安装后从主屏幕图标进入即为全屏独立窗口（无浏览器地址栏），离线也能打开查看。
+
 ## 数据与隐私
 
 - 所有数据只存在你自己的浏览器 localStorage 中，不上传任何服务器
