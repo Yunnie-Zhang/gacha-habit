@@ -6,6 +6,7 @@ import { SettlementModal } from './components/modals';
 import { TodayView } from './views/TodayView';
 import { StatsView } from './views/StatsView';
 import { ProjectsView } from './views/ProjectsView';
+import { unlockAudio } from './lib/sound';
 
 type Tab = 'today' | 'stats' | 'projects';
 
@@ -23,6 +24,14 @@ export default function App() {
 
   const pendingSettle = useStore((s) => s.pendingSettleView);
   const dismissSettlement = useStore((s) => s.dismissSettlement);
+  const soundOn = useStore((s) => s.soundOn);
+  const toggleSound = useStore((s) => s.toggleSound);
+
+  // 打卡点击是用户手势，在此同步解锁音频自动播放
+  const openGacha = useCallback((items: GachaItem[]) => {
+    unlockAudio();
+    setGacha(items);
+  }, []);
 
   const toast = useCallback((m: string) => {
     setToastMsg(m);
@@ -59,11 +68,24 @@ export default function App() {
           </svg>
           扭蛋打卡
         </div>
-        <div className="header-date">{header}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            className="btn small ghost"
+            onClick={() => {
+              toggleSound();
+              if (!soundOn) unlockAudio();
+            }}
+            aria-label="音效开关"
+            title="音效开关"
+          >
+            {soundOn ? '🔊' : '🔇'}
+          </button>
+          <div className="header-date">{header}</div>
+        </div>
       </header>
 
       <main>
-        {tab === 'today' && <TodayView openGacha={setGacha} />}
+        {tab === 'today' && <TodayView openGacha={openGacha} />}
         {tab === 'stats' && <StatsView />}
         {tab === 'projects' && <ProjectsView toast={toast} />}
       </main>

@@ -3,6 +3,8 @@ import type { Project } from '../types';
 import { randInt } from '../lib/rng';
 import { fmt, todayStr } from '../lib/date';
 import { burst, quake } from '../lib/fx';
+import { cancelSounds, playCollect, playPop, playReveal, tick } from '../lib/sound';
+import { scoreTier } from '../lib/logic';
 import { useStore } from '../store';
 
 export interface GachaItem {
@@ -58,8 +60,15 @@ export function GachaModal({ queue, onClose }: { queue: GachaItem[]; onClose: ()
     const shakeMs = 1500 + Math.floor(Math.random() * 600);
     const t: number[] = [
       window.setTimeout(() => setPhase('shake'), 260),
+      // 摇晃棘轮咔哒声：节奏加速、音调渐升
+      ...Array.from({ length: 13 }, (_, i) => {
+        const prog = i / 12;
+        const at = 260 + shakeMs * 0.92 * (1 - Math.pow(1 - prog, 1.8));
+        return window.setTimeout(() => tick(prog), at);
+      }),
       window.setTimeout(() => {
         setPhase('open');
+        playPop();
         if (!committed.current) {
           useStore
             .getState()
@@ -81,6 +90,7 @@ export function GachaModal({ queue, onClose }: { queue: GachaItem[]; onClose: ()
     if (phase !== 'reveal') return;
     const target = score;
     const p = item.project;
+    playReveal(scoreTier(p, target));
     if (target > 0) {
       const cap = document.querySelector('.capsule');
       const big = target >= 0.85 * p.posMax;
@@ -123,13 +133,16 @@ export function GachaModal({ queue, onClose }: { queue: GachaItem[]; onClose: ()
 
   const skip = () => {
     timersRef.current.forEach(clearTimeout);
+    cancelSounds();
     commit();
     cancelAnimationFrame(rafRef.current);
     setDisp(score);
     setPhase('done');
+    playReveal(scoreTier(item.project, score));
   };
 
   const collect = () => {
+    playCollect();
     if (idx + 1 < queue.length) setIdx(idx + 1);
     else onClose();
   };

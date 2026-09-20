@@ -65,6 +65,27 @@ export function heatLevel(v: number, max: number): number {
   return r >= 0.85 ? 3 : r >= 0.35 ? 2 : 1;
 }
 
+export type ScoreTier =
+  | 'jackpot' | 'great' | 'good' | 'small' | 'zero'
+  | 'neg-small' | 'neg-mid' | 'neg-big' | 'neg-huge';
+
+/** 扭蛋分级（音效与文案共用同一阈值） */
+export function scoreTier(p: Project, score: number): ScoreTier {
+  if (score === 0) return 'zero';
+  if (score > 0) {
+    const r = score / Math.max(p.posMax, 1);
+    if (score === p.posMax || r >= 0.85) return 'jackpot';
+    if (r >= 0.6) return 'great';
+    if (r >= 0.3) return 'good';
+    return 'small';
+  }
+  const r = -score / Math.max(p.negMax ?? 1, 1);
+  if (r >= 0.85) return 'neg-huge';
+  if (r >= 0.6) return 'neg-big';
+  if (r >= 0.3) return 'neg-mid';
+  return 'neg-small';
+}
+
 export interface PendingSettlement {
   date: string;
   projectId: string;

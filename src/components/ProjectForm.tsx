@@ -133,7 +133,19 @@ export function ProjectForm({ editing, onClose }: { editing: Project | null; onC
       <div className="f-row">
         <div className="switch-line">
           <label style={{ margin: 0 }}>⚡ 强制打卡（未完成将扣分）</label>
-          <button type="button" className={`switch ${mandatory ? 'on' : ''}`} aria-label="强制打卡开关" onClick={() => setMandatory((v) => !v)} />
+          <button
+            type="button"
+            className={`switch ${mandatory ? 'on' : ''}`}
+            aria-label="强制打卡开关"
+            onClick={() => {
+              // 打开强制时，负分区间默认与当前正分区间一致，用户可再调整
+              if (!mandatory) {
+                setNegMin(posMin);
+                setNegMax(posMax);
+              }
+              setMandatory(!mandatory);
+            }}
+          />
         </div>
         <div className="hint">开启后：当天不打卡，日结时系统静默扣分；也可主动「认输」或设「休息日」。</div>
       </div>

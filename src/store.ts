@@ -30,6 +30,10 @@ interface Store {
   checkins: CheckinMap;
   /** 待展示的日结结算单（静默扣分后的通知） */
   pendingSettleView: SettleItem[] | null;
+  /** 音效开关 */
+  soundOn: boolean;
+
+  toggleSound: () => void;
 
   addTag: (name: string) => Tag | null;
   addProject: (p: ProjectInput) => void;
@@ -53,6 +57,9 @@ export const useStore = create<Store>()(
       projects: [],
       checkins: {},
       pendingSettleView: null,
+      soundOn: true,
+
+      toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
 
       addTag: (name) => {
         const trimmed = name.trim();
@@ -160,7 +167,7 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'gacha-habit-v1',
-      partialize: (s) => ({ tags: s.tags, projects: s.projects, checkins: s.checkins }),
+      partialize: (s) => ({ tags: s.tags, projects: s.projects, checkins: s.checkins, soundOn: s.soundOn }),
     },
   ),
 );
