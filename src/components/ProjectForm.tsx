@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import type { Project } from '../types';
 import { useStore } from '../store';
-import { EMOJIS } from '../lib/palette';
+import { ICON_KEYS } from '../lib/icons';
+import { Icon } from './Icon';
 import { ConfirmModal, Modal } from './modals';
 
 /** 新建 / 编辑项目表单 */
 export function ProjectForm({ editing, onClose }: { editing: Project | null; onClose: () => void }) {
   const tags = useStore((s) => s.tags);
   const [name, setName] = useState(editing?.name ?? '');
-  const [emoji, setEmoji] = useState(editing?.emoji ?? '🎯');
+  const [icon, setIcon] = useState(editing?.icon ?? 'target');
   const [tagIds, setTagIds] = useState<Set<string>>(new Set(editing?.tagIds ?? []));
   const [posMin, setPosMin] = useState(String(editing?.posMin ?? 0));
   const [posMax, setPosMax] = useState(String(editing?.posMax ?? 200));
@@ -39,7 +40,7 @@ export function ProjectForm({ editing, onClose }: { editing: Project | null; onC
     }
     const patch = {
       name: nm,
-      emoji,
+      icon,
       tagIds: [...tagIds],
       posMin: pmin,
       posMax: pmax,
@@ -77,10 +78,10 @@ export function ProjectForm({ editing, onClose }: { editing: Project | null; onC
 
       <div className="f-row">
         <label>选个图标</label>
-        <div className="emoji-grid">
-          {EMOJIS.map((e) => (
-            <button key={e} type="button" className={e === emoji ? 'sel' : ''} onClick={() => setEmoji(e)}>
-              {e}
+        <div className="icon-grid">
+          {ICON_KEYS.map((k) => (
+            <button key={k} type="button" className={k === icon ? 'sel' : ''} onClick={() => setIcon(k)}>
+              <Icon name={k} size={19} />
             </button>
           ))}
         </div>

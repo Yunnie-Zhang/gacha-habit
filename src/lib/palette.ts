@@ -1,30 +1,22 @@
 /**
- * 图表与标签用色 —— 全部经过 dataviz 色板验证器校验
- * （分类色板：深色模式、卡片底色 #161c33 上全项 PASS；
- *   热力图双色臂：单调亮度 + 暗端对比度 >= 2:1 PASS）
+ * 图表与标签用色 —— 浅色主题（页面底 #ffffff 上验证通过）。
+ * 标签分类色板有 3 个浅色 slot 对比度 <3:1（WARN），
+ * 豁免条件：标签永远带文字、统计提供数据表视图。
  */
-
-/** 标签分类色，固定顺序分配给标签，永不错开复用；超出 8 个用中性灰 */
 export const TAG_PALETTE = [
-  '#3987e5', '#d95926', '#199e70', '#c98500',
-  '#d55181', '#008300', '#9085e9', '#e66767',
+  '#2a78d6', '#eb6834', '#1baf7a', '#eda100',
+  '#e87ba4', '#008300', '#4a3aa7', '#e34948',
 ] as const;
 
 export const TAG_COLOR_FALLBACK = '#8b93ad';
 
-/** 热力图：正分绿色臂 / 负分红色臂 / 无记录中性色（分裂色阶，中点=中性灰蓝） */
-export const HEAT_POS = ['#166534', '#22c55e', '#86efac'] as const;
-export const HEAT_NEG = ['#9f1239', '#e11d48', '#fb7185'] as const;
+/** 热力图：正分绿臂 / 负分红臂（浅色：越多越深） */
+export const HEAT_POS = ['#74bd89', '#2f9e60', '#136b3e'] as const;
+export const HEAT_NEG = ['#eb8f95', '#d64c5a', '#8f1f30'] as const;
 
-/** 趋势图柱色与热力臂保持同源 */
-export const BAR_POS = '#22c55e';
-export const BAR_NEG = '#e11d48';
+/** 趋势图柱色与热力臂同源 */
+export const BAR_POS = '#2f9e60';
+export const BAR_NEG = '#d64c5a';
 
-/** 扭蛋粒子色 */
-export const PARTICLE_POS = ['#fbbf24', '#f59e0b', '#fde68a', '#4ade80', '#fff7ed'];
-
-export const EMOJIS = [
-  '🌙', '🏃', '📖', '💪', '🧘', '💧', '📝', '🚫',
-  '🍎', '😴', '🎯', '🎸', '💻', '🧹', '💰', '🦷',
-  '🥗', '🚭', '⏰', '📚', '✍️', '🎨', '🧠', '❤️',
-];
+/** 扭蛋粒子色（多巴胺色板只在这里和开蛋瞬间出场） */
+export const PARTICLE_POS = ['#ff8a3d', '#ffd166', '#4ecdc4', '#a78bfa', '#6fa8ff'];

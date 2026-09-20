@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import { ProjectForm } from '../components/ProjectForm';
 import { TagChips } from './TodayView';
 import { ConfirmModal } from '../components/modals';
+import { Icon } from '../components/Icon';
 
 export function ProjectsView({ toast }: { toast: (m: string) => void }) {
   const projects = useStore((s) => s.projects);
@@ -61,7 +62,7 @@ export function ProjectsView({ toast }: { toast: (m: string) => void }) {
   return (
     <section className="view">
       <div className="row-between">
-        <h2>项目管理</h2>
+        <h2>管理</h2>
         <button className="btn primary small" onClick={() => setForm(null)}>
           ＋ 新建项目
         </button>
@@ -70,7 +71,7 @@ export function ProjectsView({ toast }: { toast: (m: string) => void }) {
       {active.length === 0 && <div className="note">还没有项目。先建一个（比如「🌙 早睡」，强制打卡，正分 0~200，负分 50~200），今天就能摇第一抽。</div>}
       {active.map((p) => (
         <div className="proj-item" key={p.id}>
-          <div className="emoji">{p.emoji}</div>
+          <div className="emoji"><Icon name={p.icon} size={22} /></div>
           <div className="proj-meta">
             <div className="pname">
               {p.name}
@@ -194,7 +195,7 @@ export function ProjectsView({ toast }: { toast: (m: string) => void }) {
           </div>
           {archived.map((p) => (
             <div className="proj-item archived" key={p.id}>
-              <div className="emoji">{p.emoji}</div>
+              <div className="emoji"><Icon name={p.icon} size={22} /></div>
               <div className="proj-meta">
                 <div className="pname">
                   {p.name}

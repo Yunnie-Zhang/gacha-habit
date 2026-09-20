@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import type { SettleItem } from '../store';
 import { fmt, weekdayCN } from '../lib/date';
 import { dayTotal, recKey } from '../lib/logic';
+import { Icon } from './Icon';
 
 /** 基础弹窗：点遮罩可选关闭 */
 export function Modal({
@@ -77,7 +78,7 @@ export function DayDetailModal({ ds, onClose }: { ds: string; onClose: () => voi
         const stText = r!.status === 'done' ? '打卡' : r!.status === 'rest' ? '休息' : r!.via === 'auto' ? '日结' : '认输';
         return (
           <div className="day-item" key={p.id}>
-            <span>{p.emoji}</span>
+            <span className="dico"><Icon name={p.icon} size={15} /></span>
             <span>{p.name}</span>
             <span className="st">{stText}</span>
             <span className={`score ${r!.score > 0 ? 'pos' : r!.score < 0 ? 'neg' : ''}`}>
@@ -109,7 +110,7 @@ export function SettlementModal({ items, onClose }: { items: SettleItem[]; onClo
       </p>
       {items.map((it, i) => (
         <div className="day-item" key={i}>
-          <span>{it.project.emoji}</span>
+          <span className="dico"><Icon name={it.project.icon} size={15} /></span>
           <span>
             {it.project.name}
             {dates.length > 1 && <span className="date-l"> · {it.date.slice(5).replace('-', '/')}</span>}

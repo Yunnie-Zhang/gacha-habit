@@ -23,7 +23,7 @@ export function generateDemoData(): { tags: Tag[]; projects: Project[]; checkins
   const first = addDays(todayStr(), -70);
   const P = (
     name: string,
-    emoji: string,
+    ic: string,
     ids: string[],
     posMin: number,
     posMax: number,
@@ -33,7 +33,7 @@ export function generateDemoData(): { tags: Tag[]; projects: Project[]; checkins
   ): Project => ({
     id: uid() + Math.floor(rng() * 1e6).toString(36),
     name,
-    emoji,
+    icon: ic,
     tagIds: ids,
     posMin,
     posMax,
@@ -44,14 +44,14 @@ export function generateDemoData(): { tags: Tag[]; projects: Project[]; checkins
     createdAt: first,
   });
   const projects = [
-    P('早睡', '🌙', [tid('健康')], 0, 200, true, 50, 200),
-    P('晨跑', '🏃', [tid('健康'), tid('运动')], 20, 150, false),
-    P('读书 30 分钟', '📖', [tid('学习')], 10, 100, false),
-    P('健身', '💪', [tid('运动')], 30, 180, true, 30, 150),
-    P('冥想 10 分钟', '🧘', [tid('心态')], 5, 60, false),
-    P('喝水 8 杯', '💧', [tid('健康')], 5, 50, false),
-    P('写日记', '📝', [tid('生活')], 10, 80, false),
-    P('刷手机 < 1 小时', '🚫', [tid('生活')], 0, 120, true, 20, 100),
+    P('早睡', 'moon', [tid('健康')], 0, 200, true, 50, 200),
+    P('晨跑', 'run', [tid('健康'), tid('运动')], 20, 150, false),
+    P('读书 30 分钟', 'book', [tid('学习')], 10, 100, false),
+    P('健身', 'dumb', [tid('运动')], 30, 180, true, 30, 150),
+    P('冥想 10 分钟', 'wind', [tid('心态')], 5, 60, false),
+    P('喝水 8 杯', 'drop', [tid('健康')], 5, 50, false),
+    P('写日记', 'pen', [tid('生活')], 10, 80, false),
+    P('刷手机 < 1 小时', 'phone', [tid('生活')], 0, 120, true, 20, 100),
   ];
   const checkins: CheckinMap = {};
   const base = Date.now();

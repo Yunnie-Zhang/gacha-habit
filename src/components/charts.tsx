@@ -13,6 +13,7 @@ import {
 } from '../lib/logic';
 import { addDays, daysInMonth, dsOf, fmt, monthKeyOf, pad, todayStr, weekdayCN } from '../lib/date';
 import { HEAT_NEG, HEAT_POS, TAG_PALETTE } from '../lib/palette';
+import { Icon } from './Icon';
 
 /* ============ 热力图（月 / 年双视图，周一开头） ============ */
 
@@ -441,16 +442,18 @@ function HBarRow({
   color,
   value,
   maxAbs,
+  ico,
 }: {
   name: string;
   color: string;
   value: number;
   maxAbs: number;
+  ico?: string;
 }) {
   return (
     <div className="tag-row">
       <div className="name">
-        <i style={{ background: color }} />
+        {ico ? <Icon name={ico} size={13} /> : <i style={{ background: color }} />}
         {name}
       </div>
       <div className="track">
@@ -506,10 +509,11 @@ export function ProjectBars({ from, to, title }: { from: string; to: string; tit
       {rows.map((r) => (
         <HBarRow
           key={r.project.id}
-          name={`${r.project.emoji} ${r.project.name}`}
+          name={r.project.name}
           color={TAG_PALETTE[0]}
           value={r.total}
           maxAbs={maxAbs}
+          ico={r.project.icon}
         />
       ))}
     </div>

@@ -7,7 +7,8 @@ export interface Tag {
 export interface Project {
   id: string;
   name: string;
-  emoji: string;
+  /** 线性图标 key（见 lib/icons.ts ICONS） */
+  icon: string;
   tagIds: string[];
   /** 打卡成功 · 正分区间（整数，min<=max，可相等=固定分） */
   posMin: number;

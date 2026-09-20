@@ -6,6 +6,7 @@ import { todayStr } from './lib/date';
 import { computePendingSettlements, recKey } from './lib/logic';
 import { generateDemoData } from './lib/demo';
 import { TAG_COLOR_FALLBACK, TAG_PALETTE } from './lib/palette';
+import { EMOJI_TO_ICON } from './lib/icons';
 
 export interface SettleItem {
   date: string;
@@ -15,7 +16,7 @@ export interface SettleItem {
 
 export interface ProjectInput {
   name: string;
-  emoji: string;
+  icon: string;
   tagIds: string[];
   posMin: number;
   posMax: number;
@@ -186,6 +187,18 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'gacha-habit-v1',
+      version: 1,
+      migrate: (persisted) => {
+        // v0 → v1：项目 emoji 迁移为线性图标 key
+        const s = persisted as Partial<Store> & { projects?: Project[] };
+        if (s && Array.isArray(s.projects)) {
+          s.projects = s.projects.map((p) => ({
+            ...p,
+            icon: p.icon ?? EMOJI_TO_ICON[(p as unknown as { emoji?: string }).emoji ?? ''] ?? 'target',
+          }));
+        }
+        return s as Store;
+      },
       partialize: (s) => ({ tags: s.tags, projects: s.projects, checkins: s.checkins, soundOn: s.soundOn }),
     },
   ),

@@ -5,6 +5,7 @@ import { fmt, todayStr } from '../lib/date';
 import { burst, quake } from '../lib/fx';
 import { cancelSounds, playCollect, playPop, playReveal, tick } from '../lib/sound';
 import { scoreTier } from '../lib/logic';
+import { Icon } from './Icon';
 import { useStore } from '../store';
 
 export interface GachaItem {
@@ -163,7 +164,8 @@ export function GachaModal({ queue, onClose }: { queue: GachaItem[]; onClose: ()
       <div className="modal gacha-modal">
         <div id="gachaTitle">{item.mode === 'giveup' ? '认输结算' : '打卡抽奖'}</div>
         <div id="gachaProject">
-          {item.project.emoji} {item.project.name}
+          <Icon name={item.project.icon} size={17} style={{ verticalAlign: '-3px', marginRight: 6 }} />
+          {item.project.name}
         </div>
         <div id="gachaStage" className={stageCls}>
           <div className="rays" />
@@ -172,12 +174,12 @@ export function GachaModal({ queue, onClose }: { queue: GachaItem[]; onClose: ()
             <svg className="capsule" viewBox="0 0 120 150" aria-hidden="true">
               <defs>
                 <linearGradient id="gTop" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stopColor="#fde68a" />
-                  <stop offset="1" stopColor="#f59e0b" />
+                  <stop offset="0" stopColor="#ffe3bd" />
+                  <stop offset="1" stopColor="#ff8a3d" />
                 </linearGradient>
                 <linearGradient id="gBot" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#fffbeb" />
-                  <stop offset="1" stopColor="#fcd34d" />
+                  <stop offset="0" stopColor="#fff8ec" />
+                  <stop offset="1" stopColor="#ffe3bd" />
                 </linearGradient>
                 <linearGradient id="gTopN" x1="0" y1="0" x2="1" y2="1">
                   <stop offset="0" stopColor="#94a3b8" />

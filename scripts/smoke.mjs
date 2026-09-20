@@ -29,8 +29,8 @@ await page.waitForSelector('text=今日总分', { timeout: 15000 });
 await page.screenshot({ path: 'shots/01-today-empty.png' });
 
 // 载入演示数据
-await page.click('.tabbar button:has-text("项目")');
-await page.waitForSelector('text=项目管理');
+await page.click('.tabbar button:has-text("管理")');
+await page.waitForTimeout(300);
 await page.click('button:has-text("载入演示数据")');
 await page.click('.overlay button:has-text("确定")');
 await page.waitForSelector('text=已载入演示数据');
@@ -40,7 +40,7 @@ await page.waitForTimeout(300);
 await page.screenshot({ path: 'shots/02-today-demo.png', fullPage: true });
 
 // 打卡扭蛋：摇晃 → 揭晓 → 收下
-await page.locator('.pcard button:has-text("🎁 打卡")').first().click();
+await page.locator('.list .btn-invest').first().click();
 await page.waitForSelector('#gachaStage');
 await page.waitForTimeout(1100);
 await page.screenshot({ path: 'shots/03-gacha-shake.png' });
@@ -52,7 +52,7 @@ await page.waitForTimeout(900);
 await page.screenshot({ path: 'shots/05-after-collect.png' });
 
 // 认输（强制项目，走扭蛋动画 + 负分）
-const giveup = page.locator('.pcard button:has-text("认输")');
+const giveup = page.locator('.linkop:has-text("认输")');
 if (await giveup.count()) {
   await giveup.first().click();
   await page.click('.overlay button:has-text("确定")');

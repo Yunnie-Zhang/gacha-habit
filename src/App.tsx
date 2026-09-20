@@ -3,6 +3,7 @@ import { useStore } from './store';
 import { GachaModal } from './components/GachaModal';
 import type { GachaItem } from './components/GachaModal';
 import { SettlementModal } from './components/modals';
+import { Icon } from './components/Icon';
 import { TodayView } from './views/TodayView';
 import { StatsView } from './views/StatsView';
 import { ProjectsView } from './views/ProjectsView';
@@ -11,9 +12,9 @@ import { unlockAudio } from './lib/sound';
 type Tab = 'today' | 'stats' | 'projects';
 
 const TABS: { id: Tab; ico: string; label: string }[] = [
-  { id: 'today', ico: '🎁', label: '今日' },
-  { id: 'stats', ico: '📊', label: '统计' },
-  { id: 'projects', ico: '⚙️', label: '项目' },
+  { id: 'today', ico: 'cap', label: '今日' },
+  { id: 'stats', ico: 'chart', label: '统计' },
+  { id: 'projects', ico: 'sliders', label: '管理' },
 ];
 
 export default function App() {
@@ -54,23 +55,13 @@ export default function App() {
     };
   }, []);
 
-  const now = new Date();
-  const header = `${now.getMonth() + 1}月${now.getDate()}日 星期${'日一二三四五六'[now.getDay()]}`;
-
   return (
     <>
       <header className="app-header">
-        <div className="brand">
-          <svg viewBox="0 0 120 150" aria-hidden="true">
-            <path d="M10 72 A50 50 0 0 1 110 72 Z" fill="#f59e0b" />
-            <rect x="6" y="66" width="108" height="12" rx="6" fill="#fbbf24" />
-            <path d="M10 78 H110 V102 Q110 128 60 128 Q10 128 10 102 Z" fill="#fef3c7" />
-          </svg>
-          扭蛋打卡
-        </div>
+        <div className="brand">扭蛋打卡</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
-            className="btn small ghost"
+            className="icobtn"
             onClick={() => {
               toggleSound();
               if (!soundOn) unlockAudio();
@@ -78,9 +69,8 @@ export default function App() {
             aria-label="音效开关"
             title="音效开关"
           >
-            {soundOn ? '🔊' : '🔇'}
+            <Icon name={soundOn ? 'sound' : 'mute'} size={17} />
           </button>
-          <div className="header-date">{header}</div>
         </div>
       </header>
 
@@ -94,7 +84,7 @@ export default function App() {
         <div className="inner">
           {TABS.map((t) => (
             <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
-              <span className="ico">{t.ico}</span>
+              <Icon name={t.ico} size={19} />
               <span>{t.label}</span>
             </button>
           ))}

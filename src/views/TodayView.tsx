@@ -4,8 +4,9 @@ import { useStore } from '../store';
 import type { GachaItem } from '../components/GachaModal';
 import { CountUp } from '../components/CountUp';
 import { ConfirmModal } from '../components/modals';
+import { Icon } from '../components/Icon';
 import { activeProjects, dayTotal, recKey, streak } from '../lib/logic';
-import { fmt, todayStr } from '../lib/date';
+import { todayStr } from '../lib/date';
 
 export function TodayView({ openGacha }: { openGacha: (items: GachaItem[]) => void }) {
   const projects = useStore((s) => s.projects);
@@ -26,6 +27,14 @@ export function TodayView({ openGacha }: { openGacha: (items: GachaItem[]) => vo
     if (r?.status === 'rest') restN++;
   }
   const list = act.filter((p) => filter === 'all' || p.tagIds.includes(filter));
+  const todo = list.filter((p) => {
+    const r = checkins[recKey(p.id, ds)];
+    return !r || r.status === 'rest';
+  });
+  const finished = list.filter((p) => {
+    const r = checkins[recKey(p.id, ds)];
+    return r && r.status !== 'rest';
+  });
 
   const giveUp = (p: Project) => {
     setConfirm({
@@ -36,16 +45,12 @@ export function TodayView({ openGacha }: { openGacha: (items: GachaItem[]) => vo
 
   return (
     <section className="view">
-      <div className="hero-card">
-        <div>
-          <div className="hero-label">今日总分</div>
-          <div className={`hero-value ${total > 0 ? 'pos' : total < 0 ? 'neg' : ''}`}>
-            <CountUp value={total} />
-          </div>
-          <div className="hero-sub">
-            已打卡 {done}/{act.length}
-            {restN > 0 && ` · 休息 ${restN} 个`} · 连续 {streak(checkins, ds)} 天
-          </div>
+      <div className="today-head">
+        <div className="h-date">{Number(ds.slice(5, 7))}月{Number(ds.slice(8, 10))}日<small>星期{'日一二三四五六'[new Date().getDay()]}</small></div>
+        <div className="sumline">
+          <span className={`big ${total > 0 ? 'pos' : total < 0 ? 'neg' : ''}`}><CountUp value={total} /></span>
+          <span className="cap">今日总分</span>
+          <span className="streak-pill">🔥 连续 {streak(checkins, ds)} 天</span>
         </div>
       </div>
 
@@ -61,12 +66,26 @@ export function TodayView({ openGacha }: { openGacha: (items: GachaItem[]) => vo
         ))}
       </div>
 
-      <div className="card-grid">
-        {list.length === 0 && (
-          <div className="note">{projects.length > 0 ? '这个标签下暂无项目' : '还没有项目，去「项目」页新建一个吧'}</div>
-        )}
-        {list.map((p) => (
-          <ProjectCard
+      <div className="sec-t">待打卡<span className="more">{todo.length ? `${todo.length} 项` : '全部完成 ✓'}</span></div>
+      <div className="list">
+        {todo.length === 0 && <div className="empty-note">{projects.length ? '这个筛选下没有待打卡的项目' : '还没有项目，去「管理」页新建一个'}</div>}
+        {todo.map((p) => (
+          <TaskRow
+            key={p.id}
+            p={p}
+            checkins={checkins}
+            onCheckin={() => openGacha([{ project: p, mode: 'checkin' }])}
+            onRest={() => toggleRest(p.id)}
+            onGiveup={() => giveUp(p)}
+          />
+        ))}
+      </div>
+
+      <div className="sec-t">已完成<span className="more">{finished.length ? `${finished.length} 项` : '暂无'}</span></div>
+      <div className="list">
+        {finished.length === 0 && <div className="empty-note">今天还没有完成的项目</div>}
+        {finished.map((p) => (
+          <TaskRow
             key={p.id}
             p={p}
             checkins={checkins}
@@ -92,7 +111,7 @@ export function TodayView({ openGacha }: { openGacha: (items: GachaItem[]) => vo
   );
 }
 
-function ProjectCard({
+function TaskRow({
   p,
   checkins,
   onCheckin,
@@ -106,50 +125,42 @@ function ProjectCard({
   onGiveup: () => void;
 }) {
   const rec = checkins[recKey(p.id, todayStr())];
+  const isRest = rec?.status === 'rest';
   return (
-    <div className="pcard">
-      <div className="top">
-        <div className="emoji">{p.emoji}</div>
-        <div>
-          <div className="pname">
-            {p.name}
-            {p.mandatory && <span className="badge-force">强制</span>}
-          </div>
-          <div className="ptags">
-            <TagChips tagIds={p.tagIds} />
-          </div>
+    <div className={`task${rec && rec.status !== 'rest' ? ' done' : ''}`}>
+      <div className="tico"><Icon name={p.icon} size={20} /></div>
+      <div className="meta">
+        <div className="nm">
+          {p.name}
+          {p.mandatory && <span className="must">必</span>}
+        </div>
+        <div className="rg">
+          +{p.posMin} ~ +{p.posMax}
+          {p.mandatory && ` · 负 -${p.negMin ?? 0} ~ -${p.negMax ?? 0}`}
         </div>
       </div>
-      <div className="prange">
-        打卡 +{p.posMin} ~ +{p.posMax}
-        {p.mandatory && ` · 失败 -${p.negMin ?? 0} ~ -${p.negMax ?? 0}`}
-      </div>
-      <div className="pstate">
+      <div className="acts">
         {!rec && (
           <>
-            <button className="btn primary small" onClick={onCheckin}>
-              🎁 打卡
-            </button>
+            <button className="btn-invest" onClick={onCheckin}>打卡</button>
             {p.mandatory && (
-              <>
-                <button className="btn small" onClick={onRest}>
-                  😴 休息
-                </button>
-                <button className="btn small danger" onClick={onGiveup}>
-                  😮‍💨 认输
-                </button>
-              </>
+              <div className="mini-ops">
+                <button className="linkop" onClick={onRest}>休息</button>
+                <button className="linkop danger" onClick={onGiveup}>认输</button>
+              </div>
             )}
           </>
         )}
-        {rec?.status === 'done' && <ScoreChip score={rec.score} sub="打卡成功" />}
-        {rec?.status === 'failed' && <ScoreChip score={rec.score} sub={rec.via === 'auto' ? '日结扣分' : '主动认输'} />}
-        {rec?.status === 'rest' && (
+        {rec?.status === 'done' && (
+          <div className="res"><span className="sc pos">{`+${rec.score}`}</span><span className="lb">打卡成功</span></div>
+        )}
+        {rec?.status === 'failed' && (
+          <div className="res"><span className="sc neg">{rec.score}</span><span className="lb">{rec.via === 'auto' ? '日结扣分' : '主动认输'}</span></div>
+        )}
+        {isRest && (
           <>
-            <span className="rest-chip">😴 休息中</span>
-            <button className="linkbtn" onClick={onRest}>
-              取消休息
-            </button>
+            <span className="rest-chip">休 息</span>
+            <button className="linkop" onClick={onRest}>取消休息</button>
           </>
         )}
       </div>
@@ -172,14 +183,5 @@ export function TagChips({ tagIds }: { tagIds: string[] }) {
         );
       })}
     </>
-  );
-}
-
-function ScoreChip({ score, sub }: { score: number; sub: string }) {
-  return (
-    <div className={`score-chip ${score > 0 ? 'pos' : score < 0 ? 'neg' : ''}`}>
-      <span>{fmt(score)}</span>
-      <span className="sub">{sub}</span>
-    </div>
   );
 }
