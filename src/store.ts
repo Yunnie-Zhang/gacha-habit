@@ -36,6 +36,10 @@ interface Store {
   toggleSound: () => void;
 
   addTag: (name: string) => Tag | null;
+  /** 重命名标签（颜色跟随标签本身不变）；重名返回 false */
+  renameTag: (id: string, name: string) => boolean;
+  /** 删除标签，并从所有项目中摘除引用（项目本身不受影响） */
+  deleteTag: (id: string) => void;
   addProject: (p: ProjectInput) => void;
   updateProject: (id: string, patch: ProjectInput) => void;
   deleteProject: (id: string) => void;
@@ -72,6 +76,21 @@ export const useStore = create<Store>()(
         };
         set((s) => ({ tags: [...s.tags, tag] }));
         return tag;
+      },
+
+      renameTag: (id, name) => {
+        const trimmed = name.trim();
+        if (!trimmed) return false;
+        if (get().tags.some((t) => t.id !== id && t.name === trimmed)) return false;
+        set((s) => ({ tags: s.tags.map((t) => (t.id === id ? { ...t, name: trimmed } : t)) }));
+        return true;
+      },
+
+      deleteTag: (id) => {
+        set((s) => ({
+          tags: s.tags.filter((t) => t.id !== id),
+          projects: s.projects.map((p) => ({ ...p, tagIds: p.tagIds.filter((x) => x !== id) })),
+        }));
       },
 
       addProject: (p) => {

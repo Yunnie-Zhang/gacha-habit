@@ -68,6 +68,16 @@ await page.click('.tabbar button:has-text("统计")');
 await page.waitForSelector('text=打卡热力图');
 await page.waitForTimeout(500);
 await page.screenshot({ path: 'shots/07-stats-mobile.png', fullPage: true });
+
+// M2：周期报表（本年）+ 年视图热力图
+await page.click('button:has-text("本年")');
+await page.waitForSelector('text=项目得分排行');
+await page.waitForTimeout(400);
+await page.screenshot({ path: 'shots/09-stats-year.png', fullPage: true });
+await page.click('.seg button:has-text("年")');
+await page.waitForSelector('.heat-months');
+await page.waitForTimeout(400);
+await page.screenshot({ path: 'shots/10-heat-year.png' });
 await ctx.close();
 
 // ---- 桌面视口：统计页布局 ----

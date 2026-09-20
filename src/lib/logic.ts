@@ -1,5 +1,5 @@
 import type { CheckinMap, Project, Tag } from '../types';
-import { addDays, dsOf, daysInMonth } from './date';
+import { addDays, dstr, dsOf } from './date';
 
 export const recKey = (pid: string, ds: string) => `${pid}|${ds}`;
 
@@ -17,6 +17,36 @@ export function dayTotal(checkins: CheckinMap, ds: string): number {
 export function recordsCount(checkins: CheckinMap, ds: string): number {
   let n = 0;
   for (const k in checkins) if (k.endsWith('|' + ds)) n++;
+  return n;
+}
+
+/** 区间内每天逐日聚合回调（含首尾，自动截至 today 之前） */
+function eachDay(from: string, to: string, today: string, fn: (ds: string) => void): number {
+  const last = to <= today ? to : today;
+  let days = 0;
+  if (from > last) return 0;
+  for (let ds = from; ; ds = addDays(ds, 1)) {
+    fn(ds);
+    days++;
+    if (ds >= last) break;
+  }
+  return days;
+}
+
+export function rangeTotal(checkins: CheckinMap, from: string, to: string, today: string): number {
+  let s = 0;
+  eachDay(from, to, today, (ds) => {
+    s += dayTotal(checkins, ds);
+  });
+  return s;
+}
+
+export function recordsInRange(checkins: CheckinMap, from: string, to: string): number {
+  let n = 0;
+  for (const k in checkins) {
+    const ds = k.split('|')[1];
+    if (ds >= from && ds <= to) n++;
+  }
   return n;
 }
 
@@ -41,7 +71,7 @@ export function streak(checkins: CheckinMap, today: string): number {
   return s;
 }
 
-/** 全历史最大单日正/负总分（用于热力图分档阈值，保证跨月颜色一致） */
+/** 全历史最大单日正/负总分（用于热力图分档阈值，保证跨视图颜色一致） */
 export function dayMaxTotals(checkins: CheckinMap): { maxPos: number; maxNeg: number } {
   let maxPos = 0;
   let maxNeg = 0;
@@ -100,12 +130,7 @@ export function computePendingSettlements(
   checkins: CheckinMap,
   today: string,
 ): PendingSettlement[] {
-  let minDs = today;
-  for (const p of projects) if (p.createdAt < minDs) minDs = p.createdAt;
-  for (const k in checkins) {
-    const ds = k.split('|')[1];
-    if (ds < minDs) minDs = ds;
-  }
+  const minDs = dataMinDate(projects, checkins, today);
   const out: PendingSettlement[] = [];
   for (let ds = minDs; ds < today; ds = addDays(ds, 1)) {
     for (const p of projects) {
@@ -118,54 +143,96 @@ export function computePendingSettlements(
   return out;
 }
 
-export interface MonthStats {
+/* ============ 报表周期 ============ */
+
+export type PeriodType = 'week' | 'month' | 'year';
+
+/** 周期区间：offset 0=当前周/月/年，正数往过去推 */
+export function periodRange(
+  type: PeriodType,
+  offset: number,
+  today: string,
+): { from: string; to: string; label: string } {
+  const t = new Date(today + 'T12:00:00');
+  if (type === 'week') {
+    const monday = new Date(t);
+    monday.setDate(t.getDate() - ((t.getDay() + 6) % 7) - offset * 7);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return {
+      from: dstr(monday),
+      to: dstr(sunday),
+      label: `${monday.getMonth() + 1}/${monday.getDate()} – ${sunday.getMonth() + 1}/${sunday.getDate()}`,
+    };
+  }
+  if (type === 'month') {
+    const first = new Date(t.getFullYear(), t.getMonth() - offset, 1);
+    const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+    return {
+      from: dstr(first),
+      to: dstr(last),
+      label: `${first.getFullYear()}年${first.getMonth() + 1}月`,
+    };
+  }
+  const y = t.getFullYear() - offset;
+  return { from: `${y}-01-01`, to: `${y}-12-31`, label: `${y}年` };
+}
+
+export interface PeriodStats {
   total: number;
+  /** 已度过的天数（用于日均） */
+  days: number;
   avg: number;
-  done: number;
-  fail: number;
+  doneAll: number;
+  mDone: number;
+  mFail: number;
   miss: number;
   rate: number;
   best: { ds: string; v: number } | null;
 }
 
-/** 本月（截至今天）汇总：强制项目完成率、最佳单日等 */
-export function monthStats(
+/** 任意周期汇总：总分/日均/强制完成率/最佳单日等 */
+export function periodStats(
   projects: Project[],
   checkins: CheckinMap,
-  y: number,
-  m: number,
+  from: string,
+  to: string,
   today: string,
-): MonthStats {
-  const dim = daysInMonth(y, m);
-  const monthEnd = dsOf(y, m, dim);
-  const lastDay = monthEnd <= today ? dim : Number(today.slice(8, 10));
+): PeriodStats {
   let total = 0;
-  let done = 0;
-  let fail = 0;
+  let doneAll = 0;
+  let mDone = 0;
+  let mFail = 0;
   let miss = 0;
-  let best: { ds: string; v: number } | null = null;
-  for (let d = 1; d <= lastDay; d++) {
-    const ds = dsOf(y, m, d);
+  let bestDs = '';
+  let bestV = -Infinity;
+  const days = eachDay(from, to, today, (ds) => {
     const t = dayTotal(checkins, ds);
     total += t;
-    if (!best || t > best.v) best = { ds, v: t };
-    for (const p of activeProjects(projects, ds)) {
-      if (!p.mandatory) continue;
-      const r = checkins[recKey(p.id, ds)];
-      if (!r) miss++;
-      else if (r.status === 'done') done++;
-      else if (r.status === 'failed') fail++;
+    if (t > bestV) {
+      bestV = t;
+      bestDs = ds;
     }
-  }
-  const denom = done + fail + miss;
+    for (const p of activeProjects(projects, ds)) {
+      const r = checkins[recKey(p.id, ds)];
+      if (r?.status === 'done') doneAll++;
+      if (!p.mandatory) continue;
+      if (!r) miss++;
+      else if (r.status === 'done') mDone++;
+      else if (r.status === 'failed') mFail++;
+    }
+  });
+  const denom = mDone + mFail + miss;
   return {
     total,
-    avg: lastDay > 0 ? Math.round(total / lastDay) : 0,
-    done,
-    fail,
+    days,
+    avg: days > 0 ? Math.round(total / days) : 0,
+    doneAll,
+    mDone,
+    mFail,
     miss,
-    rate: denom > 0 ? Math.round((done / denom) * 100) : 0,
-    best: best && best.v > 0 ? best : null,
+    rate: denom > 0 ? Math.round((mDone / denom) * 100) : 0,
+    best: bestV > 0 ? { ds: bestDs, v: bestV } : null,
   };
 }
 
@@ -174,33 +241,28 @@ export interface TagTotal {
   total: number;
 }
 
-/** 本月各标签净分（未打标签的项目归入「无标签」） */
-export function tagMonthTotals(
+/** 周期内各标签净分（未打标签的项目归入「无标签」），单次扫描 */
+export function tagTotals(
   projects: Project[],
   checkins: CheckinMap,
   tags: Tag[],
-  y: number,
-  m: number,
-  today: string,
+  from: string,
+  to: string,
 ): TagTotal[] {
-  const dim = daysInMonth(y, m);
-  const monthEnd = dsOf(y, m, dim);
-  const lastDay = monthEnd <= today ? dim : Number(today.slice(8, 10));
   const totals: Record<string, number> = {};
   const order: string[] = [];
-  for (let d = 1; d <= lastDay; d++) {
-    const ds = dsOf(y, m, d);
-    for (const p of activeProjects(projects, ds)) {
-      const r = checkins[recKey(p.id, ds)];
-      if (!r) continue;
-      const ids = p.tagIds.length > 0 ? p.tagIds : ['none'];
-      for (const id of ids) {
-        if (!(id in totals)) {
-          totals[id] = 0;
-          order.push(id);
-        }
-        totals[id] += r.score;
+  for (const k in checkins) {
+    const [pid, ds] = k.split('|');
+    if (ds < from || ds > to) continue;
+    const p = projects.find((x) => x.id === pid);
+    if (!p) continue;
+    const ids = p.tagIds.length > 0 ? p.tagIds : ['none'];
+    for (const id of ids) {
+      if (!(id in totals)) {
+        totals[id] = 0;
+        order.push(id);
       }
+      totals[id] += checkins[k].score;
     }
   }
   return order
@@ -211,6 +273,37 @@ export function tagMonthTotals(
     .sort((a, b) => b.total - a.total);
 }
 
+/** 周期内各项目净分排行（有记录才入榜；已删除项目的记录无法归属，不计） */
+export function projectTotals(
+  projects: Project[],
+  checkins: CheckinMap,
+  from: string,
+  to: string,
+): { project: Project; total: number }[] {
+  const totals = new Map<string, number>();
+  for (const k in checkins) {
+    const [pid, ds] = k.split('|');
+    if (ds < from || ds > to) continue;
+    totals.set(pid, (totals.get(pid) ?? 0) + checkins[k].score);
+  }
+  const out: { project: Project; total: number }[] = [];
+  for (const p of projects) {
+    if (!totals.has(p.id)) continue;
+    out.push({ project: p, total: totals.get(p.id)! });
+  }
+  return out.sort((a, b) => b.total - a.total);
+}
+
+export function dataMinDate(projects: Project[], checkins: CheckinMap, today: string): string {
+  let min = today;
+  for (const k in checkins) {
+    const ds = k.split('|')[1];
+    if (ds < min) min = ds;
+  }
+  for (const p of projects) if (p.createdAt < min) min = p.createdAt;
+  return min;
+}
+
 /** 近 n 天日期串（含今天），升序 */
 export function lastNDays(n: number, today: string): string[] {
   const out: string[] = [];
@@ -218,13 +311,10 @@ export function lastNDays(n: number, today: string): string[] {
   return out;
 }
 
-/** 数据里最早月份键 'YYYY-MM'（热力图可回翻的下限） */
-export function dataMinMonth(projects: Project[], checkins: CheckinMap, today: string): string {
-  let min = today;
-  for (const k in checkins) {
-    const ds = k.split('|')[1];
-    if (ds < min) min = ds;
-  }
-  for (const p of projects) if (p.createdAt < min) min = p.createdAt;
-  return min.slice(0, 7);
+/** 某年 12 个月的 [from, to] 区间 */
+export function monthRangesOfYear(y: number): { from: string; to: string }[] {
+  return Array.from({ length: 12 }, (_, i) => ({
+    from: dsOf(y, i, 1),
+    to: dstr(new Date(y, i + 1, 0)),
+  }));
 }

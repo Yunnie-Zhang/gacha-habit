@@ -7,11 +7,24 @@ import { ConfirmModal } from '../components/modals';
 
 export function ProjectsView({ toast }: { toast: (m: string) => void }) {
   const projects = useStore((s) => s.projects);
+  const tags = useStore((s) => s.tags);
   const setArchived = useStore((s) => s.setArchived);
   // undefined=关闭，null=新建，Project=编辑
   const [form, setForm] = useState<Project | null | undefined>(undefined);
   const [confirm, setConfirm] = useState<{ text: string; cb: () => void } | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const saveRename = (id: string) => {
+    const ok = useStore.getState().renameTag(id, renameVal);
+    if (!ok) {
+      toast('重命名失败：名称为空或已存在');
+      return;
+    }
+    setRenaming(null);
+    toast('已重命名');
+  };
 
   const exportData = () => {
     const { tags, projects, checkins } = useStore.getState();
@@ -101,6 +114,78 @@ export function ProjectsView({ toast }: { toast: (m: string) => void }) {
           </div>
         </div>
       ))}
+
+      <div className="row-between" style={{ marginTop: 20 }}>
+        <h2 style={{ fontSize: 15, color: 'var(--ink-2)' }}>标签管理</h2>
+      </div>
+      {tags.length === 0 && <div className="note">还没有标签。在新建/编辑项目时可以创建。</div>}
+      {tags.map((t) => {
+        const used = projects.filter((p) => p.tagIds.includes(t.id)).length;
+        return (
+          <div className="proj-item" key={t.id}>
+            <i style={{ width: 12, height: 12, borderRadius: 3, background: t.color, flex: 'none' }} />
+            {renaming === t.id ? (
+              <input
+                className="rename-input"
+                value={renameVal}
+                maxLength={8}
+                autoFocus
+                onChange={(e) => setRenameVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveRename(t.id);
+                  }
+                  if (e.key === 'Escape') setRenaming(null);
+                }}
+              />
+            ) : (
+              <div className="proj-meta">
+                <div className="pname">{t.name}</div>
+                <div className="prange">{used} 个项目使用</div>
+              </div>
+            )}
+            <div className="proj-ops">
+              {renaming === t.id ? (
+                <>
+                  <button className="btn small primary" onClick={() => saveRename(t.id)}>
+                    保存
+                  </button>
+                  <button className="btn small" onClick={() => setRenaming(null)}>
+                    取消
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="btn small"
+                    onClick={() => {
+                      setRenaming(t.id);
+                      setRenameVal(t.name);
+                    }}
+                  >
+                    重命名
+                  </button>
+                  <button
+                    className="btn small danger"
+                    onClick={() =>
+                      setConfirm({
+                        text: `删除标签「${t.name}」？将从 ${used} 个项目中移除，项目本身和历史积分不受影响。`,
+                        cb: () => {
+                          useStore.getState().deleteTag(t.id);
+                          toast('已删除标签');
+                        },
+                      })
+                    }
+                  >
+                    删除
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
 
       {archived.length > 0 && (
         <>
