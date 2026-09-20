@@ -1,6 +1,6 @@
 node_modules/
 dist/
-.DS_Store
-*.local
-
 shots/
+*.local
+.DS_Store
+design/
