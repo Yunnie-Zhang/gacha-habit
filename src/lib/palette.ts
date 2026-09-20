@@ -20,3 +20,10 @@ export const BAR_NEG = '#d64c5a';
 
 /** 扭蛋粒子色（多巴胺色板只在这里和开蛋瞬间出场） */
 export const PARTICLE_POS = ['#ff8a3d', '#ffd166', '#4ecdc4', '#a78bfa', '#6fa8ff'];
+
+/** 首页横条卡片色（莫兰迪），认输黑 / 休息灰 */
+export const BAND_PALETTE = ['#b7a6c9', '#9db5b2', '#d9b98a', '#c99a9a', '#a3b5c4', '#b5c99a'] as const;
+export const BAND_NEG = '#18100c';
+export const BAND_REST = '#b3ab9e';
+/** 卡片生长时终端迸出的星星色 */
+export const SPARK_PALETTE = ['#ffcf5c', '#ffde9c', '#ff8a3d', '#ffffff'];

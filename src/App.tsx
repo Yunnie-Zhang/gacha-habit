@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from './store';
-import { GachaModal } from './components/GachaModal';
-import type { GachaItem } from './components/GachaModal';
 import { SettlementModal } from './components/modals';
 import { Icon } from './components/Icon';
 import { TodayView } from './views/TodayView';
@@ -19,7 +17,6 @@ const TABS: { id: Tab; ico: string; label: string }[] = [
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('today');
-  const [gacha, setGacha] = useState<GachaItem[] | null>(null);
   const [toastMsg, setToastMsg] = useState('');
   const toastTimer = useRef(0);
 
@@ -27,12 +24,6 @@ export default function App() {
   const dismissSettlement = useStore((s) => s.dismissSettlement);
   const soundOn = useStore((s) => s.soundOn);
   const toggleSound = useStore((s) => s.toggleSound);
-
-  // 打卡点击是用户手势，在此同步解锁音频自动播放
-  const openGacha = useCallback((items: GachaItem[]) => {
-    unlockAudio();
-    setGacha(items);
-  }, []);
 
   const toast = useCallback((m: string) => {
     setToastMsg(m);
@@ -57,28 +48,32 @@ export default function App() {
 
   return (
     <>
-      <header className="app-header">
-        <div className="brand">扭蛋打卡</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button
-            className="icobtn"
-            onClick={() => {
-              toggleSound();
-              if (!soundOn) unlockAudio();
-            }}
-            aria-label="音效开关"
-            title="音效开关"
-          >
-            <Icon name={soundOn ? 'sound' : 'mute'} size={17} />
-          </button>
-        </div>
-      </header>
-
-      <main>
-        {tab === 'today' && <TodayView openGacha={openGacha} />}
-        {tab === 'stats' && <StatsView />}
-        {tab === 'projects' && <ProjectsView toast={toast} />}
-      </main>
+      {tab === 'today' ? (
+        <TodayView />
+      ) : (
+        <>
+          <header className="app-header">
+            <div className="brand">扭蛋打卡</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                className="icobtn"
+                onClick={() => {
+                  toggleSound();
+                  if (!soundOn) unlockAudio();
+                }}
+                aria-label="音效开关"
+                title="音效开关"
+              >
+                <Icon name={soundOn ? 'sound' : 'mute'} size={17} />
+              </button>
+            </div>
+          </header>
+          <main>
+            {tab === 'stats' && <StatsView />}
+            {tab === 'projects' && <ProjectsView toast={toast} />}
+          </main>
+        </>
+      )}
 
       <nav className="tabbar">
         <div className="inner">
@@ -91,7 +86,6 @@ export default function App() {
         </div>
       </nav>
 
-      {gacha && <GachaModal queue={gacha} onClose={() => setGacha(null)} />}
       {pendingSettle && <SettlementModal items={pendingSettle} onClose={dismissSettlement} />}
       <div id="toast" className={toastMsg ? 'show' : ''}>
         {toastMsg}

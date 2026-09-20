@@ -1,13 +1,13 @@
-/* ============ 基础（浅色 · 简约清爽 · 活力橙强调） ============ */
+/* ============ 基础（米黄暖色 · 水红点缀 · 活力橙强调） ============ */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#f7f8fa; --surface:#ffffff; --surface2:#eef1f5;
-  --ink:#1c2430; --sub:#6b7684; --faint:#a0aab5;
-  --line:#e8ecf0; --line-soft:#eef1f5;
-  --accent:#ff8a3d; --accent-deep:#e56f22; --accent-soft:#fff1e6;
-  --pos:#2e8b6f; --neg:#d65a4a;
-  --heat-none:#eef1f5;
-  --shadow:0 1px 2px rgba(16,24,32,.05),0 10px 28px rgba(16,24,32,.06);
+  --bg:#f6ebd9; --water:#f8dbd5; --surface:#fffdf8; --surface2:#f3e7d3;
+  --ink:#46382f; --sub:#9c8a80; --faint:#b5a497;
+  --line:#eadfcc; --line-soft:#f0e5d3;
+  --accent:#ff8a3d; --accent-deep:#e56f22; --accent-soft:#ffe9d2;
+  --pos:#5f8f6b; --neg:#c96f5e;
+  --heat-none:#f0e5d3;
+  --shadow:0 1px 2px rgba(70,56,47,.05),0 10px 28px rgba(70,56,47,.07);
 }
 html{color-scheme:light}
 body{
@@ -45,15 +45,25 @@ main{max-width:480px;margin:0 auto;padding:8px 16px 24px}
 .linkop:hover{color:var(--sub)}
 .linkop.danger:hover{color:var(--neg)}
 
-/* ============ 今日页 ============ */
-.today-head{padding:14px 2px 6px}
-.h-date{font-size:24px;font-weight:800}
-.h-date small{font-size:12.5px;color:var(--sub);font-weight:500;margin-left:8px}
-.sumline{display:flex;align-items:baseline;gap:10px;margin-top:12px;flex-wrap:wrap}
-.sumline .big{font-size:42px;font-weight:800;letter-spacing:-.01em;line-height:1.15}
-.sumline .cap{font-size:13px;color:var(--sub)}
-.streak-pill{margin-left:auto;display:inline-flex;align-items:center;font-size:12.5px;font-weight:700;
-  color:var(--accent-deep);background:var(--accent-soft);border-radius:99px;padding:6px 13px}
+/* ============ 今日页（水红页头 + 米黄纸面，与设计稿一致） ============ */
+.today-page{min-height:calc(100vh - 92px);background:var(--water);display:flex;flex-direction:column}
+.t-hd{padding:calc(20px + env(safe-area-inset-top)) 22px 16px}
+.t-hd-in{max-width:480px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
+.t-hd .hi{font-size:21px;font-weight:800}
+.t-hd .hi em{font-style:normal;color:#c46a5a}
+.t-hd .t-dt{margin-top:5px;font-size:12.5px;color:var(--sub);letter-spacing:.14em;font-weight:600}
+.t-hd-r{display:flex;align-items:center;gap:10px}
+.t-avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#b7a6c9,#c99a9a);
+  border:2.5px solid #fff;box-shadow:0 4px 12px rgba(70,56,47,.18);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:19px}
+/* 米黄纸面：圆角朝上，从分数卡一直铺到页底 */
+.t-sheet{flex:1;background:var(--bg);border-radius:28px 28px 0 0;box-shadow:0 -6px 22px rgba(70,56,47,.07);
+  padding-bottom:48px}
+.t-sheet-in{max-width:480px;margin:0 auto;padding:0 16px}
+.t-card{padding:18px 10px 14px;text-align:center}
+.t-card .lb{font-size:10.5px;color:var(--sub);letter-spacing:.32em;font-weight:700}
+.t-card .num{font-size:46px;font-weight:900;line-height:1.25;margin-top:2px}
+.t-card .sub{font-size:12px;color:var(--sub);margin-top:2px}
 
 /* ============ 标签筛选 ============ */
 .filter-row{display:flex;gap:8px;overflow-x:auto;padding:10px 2px;scrollbar-width:none}
@@ -63,35 +73,43 @@ main{max-width:480px;margin:0 auto;padding:8px 16px 24px}
 .chip i{width:8px;height:8px;border-radius:99px;display:inline-block}
 .chip.sel{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-deep)}
 
-/* ============ 清单 & 任务行 ============ */
-.sec-t{font-size:12.5px;font-weight:700;color:var(--sub);letter-spacing:.06em;margin:18px 2px 9px;
-  display:flex;justify-content:space-between;align-items:baseline}
-.sec-t .more{font-size:11.5px;color:var(--faint);font-weight:500}
-.list{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+/* ============ 横条卡片叠层 ============ */
+.stack{display:flex;flex-direction:column;gap:13px;margin-top:14px}
+.band{position:relative;height:86px;width:100%;border-radius:999px;color:#fff;overflow:hidden;flex:none;
+  box-shadow:0 4px 14px rgba(70,56,47,.14)}
+.band.neg{margin-left:auto} /* 认输/负分卡：靠右锚定 */
+.band.is-anim .b-acts,.band.is-anim .b-rg{display:none}
+.b-head{position:absolute;top:50%;transform:translateY(-50%);left:24px;display:flex;align-items:center;gap:7px;
+  font-size:15px;font-weight:800;white-space:nowrap;z-index:2}
+.band.neg .b-head{left:auto;right:24px}
+.b-must{font-size:9px;border:1px solid rgba(255,255,255,.65);border-radius:4px;padding:1px 4px;
+  font-weight:800;letter-spacing:.1em}
+.b-rg{position:absolute;left:24px;bottom:9px;font-size:9.5px;color:rgba(255,255,255,.82);
+  font-variant-numeric:tabular-nums;white-space:nowrap;z-index:1}
+/* 分数：贴在卡片终端（正分右端 / 认负左端） */
+.b-score{position:absolute;top:50%;transform:translateY(-50%);right:22px;text-align:right;z-index:2;line-height:1.15}
+.band.neg .b-score{right:auto;left:22px;text-align:left}
+.b-score .v{display:block;font-size:29px;font-weight:900}
+.b-score .lb{display:block;font-size:9.5px;font-weight:700;opacity:.85;margin-top:1px}
+.b-acts{position:absolute;right:16px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:12px;z-index:2}
+.mini-ops{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.b-link{border:none;background:none;font-size:11px;font-weight:600;color:rgba(255,255,255,.88);
+  text-decoration:underline;text-underline-offset:3px;padding:0}
+.b-link:disabled{opacity:.5}
+.b-link.danger{color:#ffd9cf}
+.btn-check{width:64px;height:64px;border-radius:50%;border:none;background:#fff;color:var(--ink);
+  font-size:14px;font-weight:900;letter-spacing:.14em;box-shadow:0 6px 18px rgba(70,56,47,.28);transition:.12s}
+.btn-check:active{transform:scale(.93)}
+.btn-check:disabled{opacity:.5;cursor:not-allowed}
+.rest-chip{font-size:11.5px;font-weight:700;letter-spacing:.15em;border:1.5px dashed rgba(255,255,255,.72);
+  border-radius:99px;padding:4px 12px}
 .empty-note{padding:18px 16px;font-size:13px;color:var(--faint)}
-.task{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line-soft)}
-.task:last-child{border:none}
-.task.done{opacity:.85}
-.tico{width:40px;height:40px;border-radius:12px;background:var(--bg);display:flex;align-items:center;justify-content:center;
-  flex:none;color:var(--sub)}
-.task .meta{flex:1;min-width:0}
-.task .nm{font-size:14.5px;font-weight:650;display:flex;align-items:center;gap:7px}
-.task .nm .must{font-size:9.5px;color:var(--accent-deep);border:1px solid rgba(255,138,61,.55);border-radius:4px;
-  padding:1px 5px;font-weight:800;letter-spacing:.1em}
-.task .rg{font-size:11px;color:var(--faint);margin-top:3px;font-variant-numeric:tabular-nums}
-.acts{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none}
-.btn-invest{border:none;font:inherit;font-size:13px;font-weight:800;color:#fff;background:var(--accent);
-  border-radius:12px;padding:9px 17px;box-shadow:0 3px 0 var(--accent-deep);transition:.1s}
-.btn-invest:active{transform:translateY(2px);box-shadow:0 1px 0 var(--accent-deep)}
-.mini-ops{display:flex;gap:10px}
-.task .res{display:flex;flex-direction:column;align-items:flex-end;min-width:60px}
-.task .res .sc{font-size:18px;font-weight:800}
-.task .res .lb{font-size:10px;color:var(--faint);margin-top:2px;letter-spacing:.05em}
-.rest-chip{font-size:12px;font-weight:700;color:var(--faint);letter-spacing:.15em;border:1.5px dashed var(--line);
-  border-radius:99px;padding:5px 13px}
-.tagchip{font-size:10.5px;color:var(--sub);background:var(--bg);border-radius:5px;padding:1.5px 7px;
+.tagchip{font-size:10.5px;color:var(--sub);background:var(--surface2);border-radius:5px;padding:1.5px 7px;
   display:inline-flex;align-items:center;gap:5px}
 .tagchip i{width:6px;height:6px;border-radius:2px}
+/* 卡片终端迸出的星星 */
+.spark{position:fixed;z-index:150;pointer-events:none;line-height:1;text-shadow:0 0 8px rgba(255,170,60,.85);
+  transition:transform .6s cubic-bezier(.15,.65,.35,1),opacity .6s linear}
 
 /* ============ KPI ============ */
 .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
@@ -203,47 +221,10 @@ details.table-view summary:hover{color:var(--ink)}
   max-width:430px;max-height:88vh;overflow:auto;animation:dropIn .25s ease}
 .modal h3{font-size:17px;margin-bottom:14px}
 
-/* ============ 扭蛋弹层 ============ */
-.gacha-modal{background:radial-gradient(130% 120% at 50% 0%,#fff7ee,#fdf3e7 72%);max-width:400px;text-align:center}
-#gachaTitle{font-size:12px;color:var(--faint);letter-spacing:.3em}
-#gachaProject{font-size:17px;font-weight:800;margin-top:8px}
-.capwrap{position:relative;height:150px;display:flex;align-items:flex-end;justify-content:center;margin-top:14px}
-.rays{position:absolute;left:50%;top:70px;width:320px;height:320px;transform:translate(-50%,-50%);border-radius:50%;
-  background:repeating-conic-gradient(rgba(255,138,61,.12) 0 9deg,transparent 9deg 18deg);
-  opacity:0;transition:opacity .4s;animation:spin 7s linear infinite;pointer-events:none;
-  -webkit-mask-image:radial-gradient(circle,#000 28%,transparent 66%);mask-image:radial-gradient(circle,#000 28%,transparent 66%)}
-#gachaStage.shaking .rays{opacity:1}
-#gachaStage.neg .rays{background:repeating-conic-gradient(rgba(148,163,184,.1) 0 9deg,transparent 9deg 18deg)}
-.capsule{position:relative;z-index:2;width:138px;height:auto;filter:drop-shadow(0 12px 20px rgba(229,111,34,.28))}
-#gachaStage.drop{animation:dropIn .28s ease-out}
-#gachaStage.shaking{animation:gshake 1.55s ease-in-out}
-.cap-top{transform-box:view-box;transform-origin:60px 72px}
-#gachaStage.open .cap-top{transform:translate(-36px,-132px) rotate(-44deg);opacity:0;transition:transform .5s cubic-bezier(.3,1.3,.5,1),opacity .5s}
-#gachaStage.open .cap-bot{animation:botBounce .5s ease-out}
-.flash{position:absolute;left:50%;top:40%;width:280px;height:280px;transform:translate(-50%,-50%);
-  background:radial-gradient(circle,rgba(255,255,255,.96),transparent 58%);opacity:0;pointer-events:none;z-index:3}
-#gachaStage.open .flash{animation:flashA .5s ease-out}
-.cap-top path,.cap-top rect{fill:url(#gTop)}
-.cap-bot path{fill:url(#gBot)}
-#gachaStage.neg .cap-top path,#gachaStage.neg .cap-top rect{fill:url(#gTopN)}
-#gachaStage.neg .cap-bot path{fill:url(#gBotN)}
-#gachaNumber{font-size:58px;font-weight:800;line-height:1.2;min-height:72px;opacity:0;transform:scale(.4)}
-#gachaStage.reveal #gachaNumber{opacity:1;transform:scale(1);transition:transform .38s cubic-bezier(.3,1.9,.5,1),opacity .18s}
-#gachaNumber.pos{color:var(--accent);text-shadow:0 0 30px rgba(255,138,61,.4)}
-#gachaNumber.neg{color:var(--neg);text-shadow:0 0 26px rgba(214,90,74,.3)}
-#gachaLabel{font-size:15.5px;font-weight:700;min-height:26px;margin-top:2px;color:var(--ink)}
-.gacha-actions{display:flex;flex-direction:column;gap:10px;align-items:center;margin-top:16px;min-height:66px;justify-content:flex-start}
-#gachaCollect{min-width:170px}
+/* ============ 粒子 / 震动 ============ */
 .pt{position:fixed;z-index:150;pointer-events:none;border-radius:2px;opacity:1;transition:transform var(--d) cubic-bezier(.15,.65,.35,1),opacity var(--d) linear}
 body.quake{animation:quakeA .45s ease-in-out}
-@keyframes gshake{
-  0%{transform:rotate(0)} 12%{transform:rotate(-4deg) translateY(1px)} 24%{transform:rotate(5deg)}
-  36%{transform:rotate(-7deg) translateY(2px)} 48%{transform:rotate(9deg)} 60%{transform:rotate(-11deg) translateY(3px)}
-  72%{transform:rotate(13deg)} 84%{transform:rotate(-15deg) translateY(4px)} 100%{transform:rotate(0)}}
-@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
-@keyframes flashA{0%{opacity:0}22%{opacity:1}100%{opacity:0}}
 @keyframes dropIn{from{transform:translateY(-26px) scale(.92);opacity:0}to{transform:none;opacity:1}}
-@keyframes botBounce{0%{transform:none}45%{transform:translateY(7px) scale(1.03,.97)}100%{transform:none}}
 @keyframes quakeA{0%,100%{transform:none}20%{transform:translate(-7px,3px)}40%{transform:translate(6px,-4px)}60%{transform:translate(-5px,2px)}80%{transform:translate(4px,-2px)}}
 
 /* ============ 表单 ============ */

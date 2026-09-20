@@ -121,6 +121,34 @@ export interface PendingSettlement {
   projectId: string;
 }
 
+/** 卡片生长长度归一：0(最短)~1(横贯全宽)，打卡与认输各自按区间归一 */
+export function scoreFrac(p: Project, score: number, mode: 'checkin' | 'giveup'): number {
+  if (mode === 'checkin') return p.posMax > p.posMin ? (score - p.posMin) / (p.posMax - p.posMin) : 1;
+  const negMin = p.negMin ?? 0;
+  const negMax = p.negMax ?? 0;
+  return negMax > negMin ? (-score - negMin) / (negMax - negMin) : 1;
+}
+
+/** 打卡/认输结果文案（与 playReveal 音效分级共用同一阈值） */
+export function rollLabel(p: Project, score: number): string {
+  if (score === 0) return '😶 零蛋，免费的快乐';
+  if (score > 0) {
+    const max = Math.max(p.posMax, 1);
+    const r = score / max;
+    if (score === p.posMax) return '🎯 满分抽出！！';
+    if (r >= 0.85) return '✨ 欧皇附体！！';
+    if (r >= 0.6) return '🎉 欧气满满！';
+    if (r >= 0.3) return '👍 不错不错';
+    return '🙂 积分入账';
+  }
+  const max = Math.max(p.negMax ?? 1, 1);
+  const r = -score / max;
+  if (r >= 0.85) return '💔 心态崩了…';
+  if (r >= 0.6) return '😱 大失血！';
+  if (r >= 0.3) return '🥲 小亏一场';
+  return '😅 止血成功';
+}
+
 /**
  * 待日结清单：minDate ~ 昨天里，强制且当时有效、既没打卡也没休息的记录。
  * 按设计日结为静默扣分，此处只算账，不打分。

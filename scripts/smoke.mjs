@@ -25,7 +25,7 @@ page.on('console', (m) => {
 });
 
 await page.goto('http://localhost:4173');
-await page.waitForSelector('text=今日总分', { timeout: 15000 });
+await page.waitForSelector('text=今日分数', { timeout: 15000 });
 await page.screenshot({ path: 'shots/01-today-empty.png' });
 
 // 载入演示数据
@@ -35,32 +35,28 @@ await page.click('button:has-text("载入演示数据")');
 await page.click('.overlay button:has-text("确定")');
 await page.waitForSelector('text=已载入演示数据');
 await page.click('.tabbar button:has-text("今日")');
-await page.waitForSelector('text=今日总分');
+await page.waitForSelector('text=今日分数');
 await page.waitForTimeout(300);
 await page.screenshot({ path: 'shots/02-today-demo.png', fullPage: true });
 
-// 打卡扭蛋：摇晃 → 揭晓 → 收下
-await page.locator('.list .btn-invest').first().click();
-await page.waitForSelector('#gachaStage');
-await page.waitForTimeout(1100);
-await page.screenshot({ path: 'shots/03-gacha-shake.png' });
-await page.waitForSelector('button:has-text("收下")', { timeout: 8000 });
-await page.waitForTimeout(200);
-await page.screenshot({ path: 'shots/04-gacha-reveal.png' });
-await page.click('button:has-text("收下")');
-await page.waitForTimeout(900);
-await page.screenshot({ path: 'shots/05-after-collect.png' });
+// 打卡：卡片消失 → 从左长出（终端迸星）→ 分数揭晓原地停留 → 逐行下放
+await page.locator('.stack .btn-check').first().click();
+await page.waitForSelector('.band.is-anim', { timeout: 5000 });
+await page.waitForTimeout(1300);
+await page.screenshot({ path: 'shots/03-band-growing.png' });
+await page.waitForSelector('.stack .band:has-text("早睡") .b-score', { timeout: 15000 });
+await page.waitForTimeout(600);
+await page.screenshot({ path: 'shots/04-band-hold.png', fullPage: true });
+await page.waitForTimeout(3400);
+await page.screenshot({ path: 'shots/05-band-landed.png', fullPage: true });
 
-// 认输（强制项目，走扭蛋动画 + 负分）
-const giveup = page.locator('.linkop:has-text("认输")');
+// 认输（强制项目：黑色横条从右长出 + 负分）
+const giveup = page.locator('.b-link:has-text("认输")');
 if (await giveup.count()) {
   await giveup.first().click();
   await page.click('.overlay button:has-text("确定")');
-  await page.waitForSelector('button:has-text("收下")', { timeout: 8000 });
-  await page.waitForTimeout(200);
-  await page.screenshot({ path: 'shots/06-giveup.png' });
-  await page.click('button:has-text("收下")');
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(6200);
+  await page.screenshot({ path: 'shots/06-giveup.png', fullPage: true });
 }
 
 // 统计页
@@ -85,7 +81,7 @@ const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 850 } }
 const page2 = await ctx2.newPage();
 page2.on('pageerror', (e) => errors.push('desktop pageerror: ' + e));
 await page2.goto('http://localhost:4173');
-await page2.waitForSelector('text=今日总分', { timeout: 15000 });
+await page2.waitForSelector('text=今日分数', { timeout: 15000 });
 await page2.click('.tabbar button:has-text("统计")');
 await page2.waitForSelector('text=打卡热力图');
 await page2.waitForTimeout(500);

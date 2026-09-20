@@ -10,18 +10,16 @@ export function Modal({
   children,
   onClose,
   maxW,
-  gacha,
 }: {
   children: ReactNode;
   onClose?: () => void;
   maxW?: number;
-  gacha?: boolean;
 }) {
   return (
     <div
       className="overlay"
       onClick={
-        onClose && !gacha
+        onClose
           ? (e) => {
               if (e.target === e.currentTarget) onClose();
             }
