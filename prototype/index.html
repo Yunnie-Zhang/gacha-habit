@@ -461,6 +461,18 @@ body.quake{animation:quakeA .45s ease-in-out}
   </div>
 </div>
 
+<!-- ================= 日结结算单（静默扣分通知） ================= -->
+<div class="overlay hidden" id="settleOverlay">
+  <div class="modal" style="max-width:380px">
+    <h3 id="settleTitle">日结结算单</h3>
+    <p style="font-size:12px;color:var(--muted);margin:-8px 0 12px">常规日结为静默扣分，不做扭蛋动画</p>
+    <div id="settleList"></div>
+    <div class="f-foot" style="margin-top:16px">
+      <button class="btn primary" id="settleClose" style="flex:1">知道了</button>
+    </div>
+  </div>
+</div>
+
 <div id="tip"></div>
 <div id="toast"></div>
 
@@ -675,9 +687,28 @@ function demoSettle(){
   const ds=todayStr();
   const q=activeProjects(ds).filter(p=>p.mandatory && !state.checkins[recKey(p.id,ds)]);
   if(!q.length){ toast('今天没有待结算的强制项目 🎉'); return; }
-  pendingHeroFrom=dayTotal(ds);
-  gachaQueue=q; gachaIdx=0; gachaMode='settle'; nextGacha();
+  const box=$('#settleList'); box.innerHTML='';
+  let sum=0;
+  for(const p of q){
+    const sc=-randInt(p.negMin,p.negMax);
+    sum+=sc;
+    state.checkins[recKey(p.id,ds)]={score:sc,status:'failed',via:'auto',ts:Date.now()};
+    const item=el('div','day-item');
+    item.appendChild(el('span',null,p.emoji));
+    item.appendChild(el('span',null,p.name));
+    item.appendChild(el('span','st','日结'));
+    item.appendChild(el('span','score neg',fmt(sc)));
+    box.appendChild(item);
+  }
+  const total=el('div','day-item');
+  total.appendChild(el('span',null,'Σ'));
+  total.appendChild(el('span',null,'合计'));
+  total.appendChild(el('span','score neg',fmt(sum)));
+  box.appendChild(total);
+  save(); renderAll();
+  $('#settleOverlay').classList.remove('hidden');
 }
+$('#settleClose').addEventListener('click',()=>$('#settleOverlay').classList.add('hidden'));
 function nextGacha(){
   gClear();
   if(gachaIdx>=gachaQueue.length){ finishQueue(); return; }
