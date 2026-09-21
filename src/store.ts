@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import type { Cadence, Checkin, CheckinMap, Project, RestDay, Tag } from './types';
 import { randInt, uid } from './lib/rng';
 import { todayStr } from './lib/date';
@@ -7,6 +7,7 @@ import { activeProjects, computePendingSettlements, recKey, restPurchaseState } 
 import { generateDemoData } from './lib/demo';
 import { TAG_COLOR_FALLBACK, TAG_COLOR_MIGRATE, TAG_PALETTE } from './lib/palette';
 import { EMOJI_TO_ICON } from './lib/icons';
+import { vaultKey } from './lib/auth';
 
 export interface SettleItem {
   date: string;
@@ -61,6 +62,41 @@ interface Store {
   importAll: (data: unknown) => boolean;
   resetAll: (demo: boolean) => void;
 }
+
+/** partialize 后的持久化形态（每个账号一仓） */
+interface PersistedData {
+  tags: Tag[];
+  projects: Project[];
+  checkins: CheckinMap;
+  restDays: RestDay[];
+  soundOn: boolean;
+}
+
+const EMPTY_VAULT: PersistedData = { tags: [], projects: [], checkins: {}, restDays: [], soundOn: true };
+
+/**
+ * 按账号分仓的持久化存储：实际读写 key 由 auth 层 vaultKey() 决定
+ * （gacha-habit-vault-<账号id>），persist 的 name 仅作内部标识。
+ * 未登录：读为 null、写为 no-op（登录页期间不产生写入，也不会误读旧版全局 key）；
+ * 已登录但仓不存在（新注册账号）：返回空仓，保证切换账号后 rehydrate 能
+ * 完整覆盖上一账号的内存态（返回 null 则会残留、并把旧数据写进新仓）。
+ * 账号切换时由 App 层调用 useStore.persist.rehydrate() 完成换仓。
+ */
+const vaultStorage: StateStorage = {
+  getItem: () => {
+    const key = vaultKey();
+    if (!key) return null;
+    return localStorage.getItem(key) ?? JSON.stringify({ state: EMPTY_VAULT, version: 4 });
+  },
+  setItem: (_name, value) => {
+    const key = vaultKey();
+    if (key) localStorage.setItem(key, value);
+  },
+  removeItem: () => {
+    const key = vaultKey();
+    if (key) localStorage.removeItem(key);
+  },
+};
 
 export const useStore = create<Store>()(
   persist(
@@ -275,7 +311,8 @@ export const useStore = create<Store>()(
         if (!Array.isArray(s.restDays)) s.restDays = [];
         return s as Store;
       },
-      partialize: (s) => ({
+      storage: createJSONStorage<PersistedData>(() => vaultStorage),
+      partialize: (s): PersistedData => ({
         tags: s.tags,
         projects: s.projects,
         checkins: s.checkins,

@@ -6,12 +6,15 @@ import {
   type PointerEvent as RPointerEvent,
 } from 'react';
 import { useStore } from './store';
-import { SettlementModal } from './components/modals';
+import { AccountModal, AvatarEditorModal, ConfirmModal, SettlementModal } from './components/modals';
+import { AvatarFace } from './components/Avatar';
 import { Icon } from './components/Icon';
 import { TodayView, enDate } from './views/TodayView';
 import { StatsView } from './views/StatsView';
 import { ProjectsView } from './views/ProjectsView';
 import { AchievementsView, ExchangeView } from './views/ExchangeView';
+import { LoginView } from './views/LoginView';
+import { useAuth, useCurrentAccount } from './lib/auth';
 import { playCollect, playPop, unlockAudio } from './lib/sound';
 
 type Tab = 'stats' | 'exchange' | 'achv' | 'projects';
@@ -46,11 +49,22 @@ function dockPath(w: number): string {
   ].join(' ');
 }
 
-export default function App() {
+function Main({ toast, avatarIn }: { toast: (m: string) => void; avatarIn: boolean }) {
   const [tab, setTab] = useState<Tab>('stats');
   const [phase, setPhase] = useState<Phase>('open'); // 启动即铺开今日页
-  const [toastMsg, setToastMsg] = useState('');
-  const toastTimer = useRef(0);
+  const account = useCurrentAccount();
+  const [acctOpen, setAcctOpen] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const [avEditorOpen, setAvEditorOpen] = useState(false);
+  const showAvTip = avatarIn && !!account && !account.avatar && !account.avatarTipDismissed;
+  const openLogoutConfirm = () => {
+    setAcctOpen(false);
+    setConfirmLogout(true);
+  };
+  const doLogout = () => {
+    setConfirmLogout(false);
+    useAuth.getState().logout();
+  };
 
   const layerRef = useRef<HTMLDivElement>(null);
   const ballRef = useRef<HTMLButtonElement>(null);
@@ -67,13 +81,7 @@ export default function App() {
   const soundOn = useStore((s) => s.soundOn);
   const toggleSound = useStore((s) => s.toggleSound);
 
-  const toast = (m: string) => {
-    setToastMsg(m);
-    window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToastMsg(''), 2200);
-  };
-
-  // 日结引擎：启动时补结算；每 30s 与页面回到前台时检查跨天
+  // 日结引擎：启动时补结算；每 30s 与页面回到前台时检查跨天（Main 仅登录后挂载）
   useEffect(() => {
     const run = () => useStore.getState().runSettlement();
     run();
@@ -290,7 +298,7 @@ export default function App() {
         <div className="t-hd-in">
           <div>
             <div className="hi">
-              hi，<em>Yunnie</em>
+              hi，<em>{account?.name ?? '…'}</em>
             </div>
             <div className="t-dt">{enDate()}</div>
           </div>
@@ -306,7 +314,27 @@ export default function App() {
             >
               <Icon name={soundOn ? 'sound' : 'mute'} size={17} />
             </button>
-            <div className="t-avatar">Y</div>
+            <div className="av-wrap">
+              <button
+                className={`t-avatar${avatarIn ? ' avatar-in' : ''}`}
+                style={avatarIn ? undefined : { visibility: 'hidden' }}
+                onClick={() => setAcctOpen(true)}
+                aria-label="账号"
+                title="账号"
+              >
+                <AvatarFace account={account} />
+              </button>
+              {showAvTip && (
+                <div className="av-tip">
+                  <button className="av-tip-go" onClick={() => setAvEditorOpen(true)}>
+                    修改头像
+                  </button>
+                  <button className="av-tip-x" onClick={() => useAuth.getState().dismissAvatarTip()}>
+                    不再提示
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -397,9 +425,183 @@ export default function App() {
       </nav>
 
       {pendingSettle && <SettlementModal items={pendingSettle} onClose={dismissSettlement} />}
+      {acctOpen && (
+        <AccountModal
+          onClose={() => setAcctOpen(false)}
+          onLogout={openLogoutConfirm}
+          onEditAvatar={() => {
+            setAcctOpen(false);
+            setAvEditorOpen(true);
+          }}
+          toast={toast}
+        />
+      )}
+      {avEditorOpen && <AvatarEditorModal onClose={() => setAvEditorOpen(false)} toast={toast} />}
+      {confirmLogout && <ConfirmModal text="退出登录后回到登录页，数据仍保留在本机该账号下。" onYes={doLogout} onNo={() => setConfirmLogout(false)} />}
+    </div>
+  );
+}
+
+/** 登录头像迎宾飞行参数：起飞圆心/直径 + 中央展示的问候语 */
+interface FlySpec {
+  cx: number;
+  cy: number;
+  size: number;
+  hello: string;
+}
+
+const FLY_CENTER_RATIO = 0.4; // 迎宾时头像圆心的屏幕高度占比
+const FLY_CENTER_SIZE = 128; // 迎宾时头像放大的直径
+
+/** 登录门卫：未登录只渲染登录页；登录态切换时在绘制前完成数据换仓（rehydrate） */
+export default function App() {
+  const currentId = useAuth((s) => s.currentId);
+  const account = useCurrentAccount();
+  const [toastMsg, setToastMsg] = useState('');
+  const [flight, setFlight] = useState<FlySpec | null>(null);
+  const flyRef = useRef<HTMLDivElement>(null);
+  const veilRef = useRef<HTMLDivElement>(null);
+  const helloRef = useRef<HTMLDivElement>(null);
+  const toastTimer = useRef(0);
+
+  const toast = (m: string) => {
+    setToastMsg(m);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToastMsg(''), 2200);
+  };
+
+  useLayoutEffect(() => {
+    void useStore.persist.rehydrate();
+    useStore.setState({ pendingSettleView: null });
+  }, [currentId]);
+
+  // 迎宾飞行三段式：①头像放大飞向屏幕中央 → ②问候语浮现并停留 1s →
+  // ③幕布揭开、头像缩小飞向页头头像位，落位后真头像以 avatar-in 弹出。
+  // 幕布淡入盖住登录页/主界面，让整个流程只聚焦头像；落位前页头头像保持隐藏。
+  useLayoutEffect(() => {
+    if (!flight || !currentId) return;
+    const ghost = flyRef.current;
+    const veil = veilRef.current;
+    const hello = helloRef.current;
+    if (!ghost || !veil || !hello) {
+      setFlight(null);
+      return;
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setFlight(null);
+      return;
+    }
+
+    let cancelled = false;
+    const anims: Animation[] = [];
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    const base = flight.size;
+    // 当前变换（WAAPI 后续动画会整体覆盖前一个，关键帧需显式接续）
+    const cur = { x: 0, y: 0, s: 1 };
+    const move = (tx: number, ty: number, scale: number, dur: number, easing: string) => {
+      const a = ghost.animate(
+        [
+          { transform: `translate(${cur.x}px, ${cur.y}px) scale(${cur.s})` },
+          { transform: `translate(${tx}px, ${ty}px) scale(${scale})` },
+        ],
+        { duration: dur, easing, fill: 'forwards' },
+      );
+      anims.push(a);
+      cur.x = tx;
+      cur.y = ty;
+      cur.s = scale;
+      return a.finished;
+    };
+
+    (async () => {
+      try {
+        // 幕布淡入，盖住登录页
+        anims.push(veil.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out', fill: 'forwards' }));
+        // ① 放大飞向屏幕中央
+        const cx1 = window.innerWidth / 2;
+        const cy1 = window.innerHeight * FLY_CENTER_RATIO;
+        await move(
+          cx1 - flight.cx,
+          cy1 - flight.cy,
+          FLY_CENTER_SIZE / base,
+          520,
+          'cubic-bezier(.3,.86,.32,1)',
+        );
+        if (cancelled) return;
+        // ② 问候语浮现，停留 1s
+        anims.push(
+          hello.animate(
+            [{ opacity: 0, transform: 'translate(-50%, 10px)' }, { opacity: 1, transform: 'translate(-50%, 0px)' }],
+            { duration: 320, easing: 'ease-out', fill: 'forwards' },
+          ),
+        );
+        await sleep(1000);
+        if (cancelled) return;
+        // ③ 问候语退场、幕布揭开，同时头像缩小飞向页头头像位
+        anims.push(hello.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, easing: 'ease-in', fill: 'forwards' }));
+        anims.push(veil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 480, easing: 'ease-in', fill: 'forwards' }));
+        const target = document.querySelector('.t-avatar');
+        if (!target) {
+          setFlight(null);
+          return;
+        }
+        const b = target.getBoundingClientRect();
+        await move(
+          b.left + b.width / 2 - flight.cx,
+          b.top + b.height / 2 - flight.cy,
+          b.width / base,
+          560,
+          'cubic-bezier(.4,.1,.3,1)',
+        );
+        if (cancelled) return;
+        setFlight(null); // 摘掉幽灵/幕布/问候语，页头头像以 avatar-in 弹出
+      } catch {
+        // 动画被清理取消（组件卸载）：不再推进
+        if (!cancelled) setFlight(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      anims.forEach((a) => a.cancel());
+    };
+  }, [flight, currentId]);
+
+  return (
+    <>
+      {currentId ? (
+        <Main toast={toast} avatarIn={!flight} />
+      ) : (
+        <LoginView toast={toast} onAvatarFly={setFlight} />
+      )}
       <div id="toast" className={toastMsg ? 'show' : ''}>
         {toastMsg}
       </div>
-    </div>
+      {flight && account && (
+        <>
+          <div ref={veilRef} className="fly-veil" />
+          <div
+            ref={helloRef}
+            className="fly-hello"
+            style={{ top: window.innerHeight * FLY_CENTER_RATIO + FLY_CENTER_SIZE / 2 + 22 }}
+          >
+            {flight.hello}
+          </div>
+          <div
+            ref={flyRef}
+            className="avatar-fly"
+            style={{
+              left: flight.cx - flight.size / 2,
+              top: flight.cy - flight.size / 2,
+              width: flight.size,
+              height: flight.size,
+              fontSize: flight.size * 0.39,
+            }}
+          >
+            <AvatarFace account={account} />
+          </div>
+        </>
+      )}
+    </>
   );
 }

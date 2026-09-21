@@ -81,7 +81,6 @@ export function ProjectsView({ toast }: { toast: (m: string) => void }) {
                   {(p.target ?? 1) > 1 ? ` ${p.target} 次` : ''}
                 </span>
               )}
-              {p.mandatory && <span className="badge-force">强制</span>}
             </div>
             <div className="ptags">
               <TagChips tagIds={p.tagIds} />

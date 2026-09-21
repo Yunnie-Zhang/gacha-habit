@@ -1,7 +1,10 @@
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import type { SettleItem } from '../store';
+import { useAuth, useCurrentAccount } from '../lib/auth';
+import { resizeAvatar } from '../lib/avatar';
 import { fmt, todayStr, weekdayCN } from '../lib/date';
+import { AvatarFace } from './Avatar';
 import {
   REST_MONTHLY_LIMIT,
   REST_MULT,
@@ -210,6 +213,239 @@ export function RestDayModal({
           {st.canBuy ? '兑换放假' : st.reason}
         </button>
       </div>
+    </Modal>
+  );
+}
+
+/** 账号与设置（点头像打开）：改名、改密码、退出登录 */
+export function AccountModal({
+  onClose,
+  onLogout,
+  onEditAvatar,
+  toast,
+}: {
+  onClose: () => void;
+  onLogout: () => void;
+  onEditAvatar: () => void;
+  toast: (m: string) => void;
+}) {
+  const account = useCurrentAccount();
+  const [editing, setEditing] = useState<'name' | 'pass' | null>(null);
+  const [nameVal, setNameVal] = useState('');
+  const [curPass, setCurPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  if (!account) return null;
+  const startEdit = (what: 'name' | 'pass') => {
+    setEditing(what);
+    setErr('');
+    if (what === 'name') setNameVal(account.name);
+    else {
+      setCurPass('');
+      setNewPass('');
+    }
+  };
+
+  const saveName = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await useAuth.getState().rename(nameVal);
+      toast(`已改名为「${nameVal.trim()}」`);
+      setEditing(null);
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : '出错了，请重试');
+    }
+    setBusy(false);
+  };
+
+  const savePass = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await useAuth.getState().changePassword(curPass, newPass);
+      toast('密码已更新');
+      setEditing(null);
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : '出错了，请重试');
+    }
+    setBusy(false);
+  };
+
+  return (
+    <Modal maxW={340} onClose={onClose}>
+      <h3>账号与设置</h3>
+      <div className="acct-row">
+        <div
+          className="t-avatar acct-avatar av-click"
+          onClick={onEditAvatar}
+          title="点开大图 / 修改头像"
+          role="button"
+        >
+          <AvatarFace account={account} />
+        </div>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>{account.name}</div>
+          <div style={{ fontSize: 12, color: 'var(--sub)', marginTop: 3 }}>注册于 {account.createdAt}</div>
+        </div>
+      </div>
+
+      {editing === 'name' ? (
+        <div className="acct-edit">
+          <input
+            className="login-input"
+            value={nameVal}
+            maxLength={12}
+            autoFocus
+            placeholder="新用户名（2~12 个字符）"
+            onChange={(e) => setNameVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                saveName();
+              }
+            }}
+          />
+          {err && <p className="login-err">{err}</p>}
+          <div className="f-foot">
+            <button className="btn" onClick={() => setEditing(null)}>
+              取消
+            </button>
+            <button className="btn primary" disabled={busy || !nameVal.trim()} onClick={saveName}>
+              保存
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="acct-item">
+          <span className="acct-k">用户名</span>
+          <span className="acct-v">{account.name}</span>
+          <button className="linkop" onClick={() => startEdit('name')}>
+            修改
+          </button>
+        </div>
+      )}
+
+      {editing === 'pass' ? (
+        <div className="acct-edit">
+          <input
+            className="login-input"
+            type="password"
+            value={curPass}
+            autoFocus
+            placeholder="当前密码"
+            autoComplete="current-password"
+            onChange={(e) => setCurPass(e.target.value)}
+          />
+          <input
+            className="login-input"
+            type="password"
+            value={newPass}
+            placeholder="新密码（至少 4 位）"
+            autoComplete="new-password"
+            onChange={(e) => setNewPass(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                savePass();
+              }
+            }}
+          />
+          {err && <p className="login-err">{err}</p>}
+          <div className="f-foot">
+            <button className="btn" onClick={() => setEditing(null)}>
+              取消
+            </button>
+            <button className="btn primary" disabled={busy || !curPass || !newPass} onClick={savePass}>
+              保存
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="acct-item">
+          <span className="acct-k">密码</span>
+          <span className="acct-v">••••</span>
+          <button className="linkop" onClick={() => startEdit('pass')}>
+            修改
+          </button>
+        </div>
+      )}
+
+      <div className="f-foot" style={{ marginTop: 16 }}>
+        <button className="btn" onClick={onClose}>
+          关闭
+        </button>
+        <button className="btn danger" onClick={onLogout}>
+          退出登录
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** 头像大图查看与修改：上传新图先预览，点「确认应用」才生效；取消/关闭不应用 */
+export function AvatarEditorModal({ onClose, toast }: { onClose: () => void; toast: (m: string) => void }) {
+  const account = useCurrentAccount();
+  const [draft, setDraft] = useState<string | null>(null); // 新头像预览（未应用）
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  if (!account) return null;
+
+  const pick = (file: File) => {
+    resizeAvatar(file)
+      .then((dataUrl) => setDraft(dataUrl))
+      .catch(() => toast('图片读取失败，换一张试试'));
+  };
+
+  const apply = async () => {
+    if (!draft || busy) return;
+    setBusy(true);
+    try {
+      await useAuth.getState().setAvatar(draft);
+      toast('头像已更新');
+      onClose();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : '出错了，请重试');
+    }
+    setBusy(false);
+  };
+
+  return (
+    <Modal maxW={360} onClose={onClose}>
+      <h3>{draft ? '预览新头像' : '头像'}</h3>
+      <div className="av-editor">
+        <div className="t-avatar av-big">
+          {draft ? <img className="avatar-img" src={draft} alt="" /> : <AvatarFace account={account} />}
+        </div>
+      </div>
+      <p className="av-editor-note">
+        {draft ? '满意就点「确认应用」；取消或关闭则保留当前头像。' : '支持 JPG/PNG，会自动裁圆并压缩。'}
+      </p>
+      <div className="f-foot">
+        <button className="btn" onClick={onClose}>
+          取消
+        </button>
+        <button className="btn" onClick={() => fileRef.current?.click()}>
+          {draft ? '重新上传' : '修改头像'}
+        </button>
+        <button className="btn primary" disabled={!draft || busy} onClick={apply}>
+          确认应用
+        </button>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) pick(f);
+          e.target.value = '';
+        }}
+      />
     </Modal>
   );
 }

@@ -1,10 +1,10 @@
-/* ============ 基础（米黄暖色 · 皮粉点缀 · 活力橙强调） ============ */
+/* ============ 基础（米黄暖色 · 皮粉点缀 · 皮粉深阶强调） ============ */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#f6ebd9; --skin:#f2c7bb; --surface:#fffdf8; --surface2:#f3e7d3;
   --ink:#46382f; --sub:#9c8a80; --faint:#b5a497;
   --line:#eadfcc; --line-soft:#f0e5d3;
-  --accent:#ff8a3d; --accent-deep:#e56f22; --accent-soft:#ffe9d2;
+  --accent:#c46a5a; --accent-deep:#a85545; --accent-soft:#f9e2d9; /* 强调色=皮粉深阶，与主题同源 */
   --pos:#c96f5e; --neg:#8a4936; /* 盈利=皮粉深阶 / 亏损=赭墨，统计页强调与主题统一 */
   --heat-none:#f0e5d3;
   --r-card:22px; --r-ctl:12px; /* 卡片 / 控件统一圆角 */
@@ -380,3 +380,71 @@ body.quake{animation:quakeA .45s ease-in-out}
 #toast{position:fixed;left:50%;bottom:112px;transform:translateX(-50%) translateY(16px);background:#1c2430;color:#fff;
   padding:10px 20px;border-radius:99px;font-size:14px;opacity:0;transition:.25s;z-index:300;pointer-events:none;white-space:nowrap}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ============ 登录页（强制登录门卫，账号体系为本地演示） ============ */
+.login{height:100vh;height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:linear-gradient(180deg,var(--skin),#edbcb0)}
+.login-card{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-card);box-shadow:var(--shadow);padding:28px 24px 20px}
+.login-brand{text-align:center;margin-bottom:20px}
+.login-avatar{width:96px;height:96px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#b7a6c9,#c99a9a);color:#fff;font-weight:800;font-size:37px;
+  border:2.5px solid #fff;box-shadow:0 4px 12px rgba(70,56,47,.18)}
+.login-brand h1{font-size:21px;font-weight:900;letter-spacing:.06em}
+.login-brand p{margin-top:5px;font-size:12px;color:var(--sub)}
+.login-tabs{display:flex;gap:6px;margin-bottom:16px}
+.login-tabs button{flex:1;padding:7px 0;font-size:13.5px;font-weight:700;color:var(--sub);
+  border:1px solid var(--line);border-radius:99px;background:var(--surface);transition:.15s}
+.login-tabs button:hover{border-color:var(--accent)}
+.login-tabs button.sel{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-deep)}
+.login-input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-ctl);
+  padding:10px 12px;font:inherit;font-size:14px;color:var(--ink);margin-bottom:10px;outline:none;transition:.15s}
+.login-input:focus{border-color:var(--accent)}
+.login-err{font-size:12.5px;color:var(--neg);margin:-2px 0 10px;line-height:1.5}
+.login-btn{width:100%;padding:11px 0;font-size:15px}
+
+/* 账号弹窗（点头像）：信息 + 用户名/密码管理 */
+.acct-row{display:flex;align-items:center;gap:14px;padding:4px 0 10px}
+.acct-avatar{flex:none;width:52px;height:52px;font-size:20px}
+.acct-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line-soft)}
+.acct-k{font-size:13px;color:var(--sub);font-weight:600}
+.acct-v{margin-left:auto;font-size:13.5px;font-weight:700;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct-item .linkop{flex:none;font-size:12px}
+.acct-edit{padding:10px 0 4px;border-top:1px solid var(--line-soft)}
+
+/* 登录头像迎宾飞行：幕布 + 幽灵头像 + 中央问候语，落位后页头头像弹出 */
+.fly-veil{position:fixed;inset:0;z-index:390;background:linear-gradient(180deg,var(--skin),#edbcb0);opacity:0;pointer-events:none}
+.fly-hello{position:fixed;left:50%;z-index:400;transform:translate(-50%,0);opacity:0;pointer-events:none;
+  font-size:17px;font-weight:800;color:var(--ink);letter-spacing:.02em;white-space:nowrap}
+.avatar-fly{position:fixed;z-index:400;border-radius:999px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#b7a6c9,#c99a9a);color:#fff;font-weight:800;
+  border:2.5px solid #fff;box-shadow:0 4px 12px rgba(70,56,47,.18);pointer-events:none;will-change:transform}
+@keyframes avatarIn{
+  0%{transform:scale(.5);opacity:0}
+  60%{transform:scale(1.18)}
+  100%{transform:scale(1);opacity:1}
+}
+.t-avatar.avatar-in{animation:avatarIn .42s cubic-bezier(.3,1.5,.4,1)}
+
+/* 头像图片（自定义头像铺满圆形外壳） */
+.avatar-img{display:block;width:100%;height:100%;object-fit:cover;border-radius:999px}
+
+/* 新用户「修改头像」气泡：悬在头像左上方、箭头指向头像但不遮挡；
+   页头头像贴屏幕顶、正上方放不下整颗气泡，故走左上侧位 */
+.av-wrap{position:relative}
+.av-tip{position:absolute;right:calc(100% + 12px);top:-10px;z-index:60;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:4px 10px;
+  display:flex;align-items:center;gap:10px;white-space:nowrap;
+  animation:avTipIn .35s cubic-bezier(.3,1.4,.4,1) .7s backwards}
+.av-tip::after{content:'';position:absolute;left:100%;top:16px;border:6px solid transparent;border-left-color:var(--surface)}
+.av-tip-go{font-size:12px;font-weight:800;color:var(--accent-deep)}
+.av-tip-x{font-size:11px;color:var(--faint);text-decoration:underline;text-underline-offset:3px}
+@keyframes avTipIn{from{opacity:0;transform:translateY(6px) scale(.92)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.av-tip{animation:none}}
+
+/* 头像大图编辑（账号弹窗点头像打开） */
+.av-click{cursor:pointer;transition:.15s}
+.av-click:hover{transform:scale(1.05)}
+.av-editor{display:flex;justify-content:center;padding:6px 0 2px}
+.av-big{width:120px;height:120px;font-size:44px}
+.av-editor-note{font-size:12px;color:var(--faint);line-height:1.7;text-align:center;margin:8px 0 16px}
