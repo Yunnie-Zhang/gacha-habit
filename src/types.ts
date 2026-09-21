@@ -36,3 +36,12 @@ export interface Checkin {
 
 /** 打卡记录键：`${projectId}|${date}` */
 export type CheckinMap = Record<string, Checkin>;
+
+/** 兑换的放假日（独立账本：扣分不进每日积分流水，图表保持纯行为记录） */
+export interface RestDay {
+  /** 放假日期 YYYY-MM-DD */
+  ds: string;
+  /** 兑换消耗的积分 */
+  cost: number;
+  ts: number;
+}

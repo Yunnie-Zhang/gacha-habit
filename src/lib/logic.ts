@@ -1,4 +1,4 @@
-import type { CheckinMap, Project, Tag } from '../types';
+import type { CheckinMap, Project, RestDay, Tag } from '../types';
 import { addDays, dstr, dsOf } from './date';
 
 export const recKey = (pid: string, ds: string) => `${pid}|${ds}`;
@@ -245,8 +245,10 @@ export function periodStats(
       const r = checkins[recKey(p.id, ds)];
       if (r?.status === 'done') doneAll++;
       if (!p.mandatory) continue;
-      if (!r) miss++;
-      else if (r.status === 'done') mDone++;
+      if (!r) {
+        // 今天还没过完，未打卡不算遗漏（日结次日才追溯结算）
+        if (ds !== today) miss++;
+      } else if (r.status === 'done') mDone++;
       else if (r.status === 'failed') mFail++;
     }
   });
@@ -345,4 +347,106 @@ export function monthRangesOfYear(y: number): { from: string; to: string }[] {
     from: dsOf(y, i, 1),
     to: dstr(new Date(y, i + 1, 0)),
   }));
+}
+
+/* ============ 放假兑换（独立账本，不进每日积分流水） ============ */
+
+/** 定价：4 × 近 30 天日均 |总分|（截至昨天） */
+export const REST_WINDOW = 30;
+export const REST_MULT = 4;
+/** 兑换解锁：使用历史满 7 天 */
+export const REST_UNLOCK_DAYS = 7;
+/** 每月最多兑换天数 */
+export const REST_MONTHLY_LIMIT = 5;
+
+/** 兑换一日放假的积分价格；0 记录保底 1 分（解锁与否由 restPurchaseState 判定） */
+export function restDayPrice(checkins: CheckinMap, today: string): number {
+  let absSum = 0;
+  for (let i = 1; i <= REST_WINDOW; i++) absSum += Math.abs(dayTotal(checkins, addDays(today, -i)));
+  return Math.max(1, Math.round((absSum / REST_WINDOW) * REST_MULT));
+}
+
+export function allTimeTotal(checkins: CheckinMap): number {
+  let s = 0;
+  for (const k in checkins) s += checkins[k].score;
+  return s;
+}
+
+/** 可用余额 = 累计总分 − 累计放假消耗 */
+export function restBalance(checkins: CheckinMap, restDays: RestDay[]): number {
+  return allTimeTotal(checkins) - restDays.reduce((a, r) => a + r.cost, 0);
+}
+
+export function restDaysUsedInMonth(restDays: RestDay[], today: string): number {
+  const ym = today.slice(0, 7);
+  let n = 0;
+  for (const r of restDays) if (r.ds.slice(0, 7) === ym) n++;
+  return n;
+}
+
+/** 今天是否已有实质记录（打卡/认输/日结扣分）——放假只能兑「干净」的今天 */
+export function dayHasActiveRecords(checkins: CheckinMap, ds: string): boolean {
+  for (const k in checkins) {
+    if (!k.endsWith('|' + ds)) continue;
+    if (checkins[k].status !== 'rest') return true;
+  }
+  return false;
+}
+
+export interface RestPurchaseState {
+  /** 兑换价格；未解锁时为 null */
+  price: number | null;
+  canBuy: boolean;
+  /** 不可兑换时的简短原因（用于禁用态按钮） */
+  reason: string;
+}
+
+/** 今天能否兑换放假：解锁 → 额度 → 今天干净 → 余额足够 */
+export function restPurchaseState(
+  projects: Project[],
+  checkins: CheckinMap,
+  restDays: RestDay[],
+  today: string,
+): RestPurchaseState {
+  const minDs = dataMinDate(projects, checkins, today);
+  const days = Math.floor(
+    (Date.parse(today + 'T12:00:00') - Date.parse(minDs + 'T12:00:00')) / 86400000,
+  );
+  if (days < REST_UNLOCK_DAYS) {
+    return {
+      price: null,
+      canBuy: false,
+      reason: `再坚持 ${REST_UNLOCK_DAYS - days} 天解锁`,
+    };
+  }
+  const price = restDayPrice(checkins, today);
+  if (restDays.some((r) => r.ds === today)) {
+    return { price, canBuy: false, reason: '今天已在放假' };
+  }
+  if (restDaysUsedInMonth(restDays, today) >= REST_MONTHLY_LIMIT) {
+    return { price, canBuy: false, reason: '本月额度用完' };
+  }
+  if (dayHasActiveRecords(checkins, today)) {
+    return { price, canBuy: false, reason: '今天已有记录' };
+  }
+  if (restBalance(checkins, restDays) < price) {
+    return { price, canBuy: false, reason: '余额不足' };
+  }
+  return { price, canBuy: true, reason: '' };
+}
+
+/** 全历史最长连续天数（休息/放假日不断签） */
+export function longestStreak(projects: Project[], checkins: CheckinMap, today: string): number {
+  const minDs = dataMinDate(projects, checkins, today);
+  let cur = 0;
+  let max = 0;
+  for (let ds = minDs; ds <= today; ds = addDays(ds, 1)) {
+    if (dayQualifies(checkins, ds)) {
+      cur++;
+      if (cur > max) max = cur;
+    } else {
+      cur = 0;
+    }
+  }
+  return max;
 }

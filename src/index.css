@@ -131,14 +131,42 @@ main{max-width:480px;margin:0 auto;padding:10px 16px calc(120px + env(safe-area-
 .spark{position:fixed;z-index:150;pointer-events:none;line-height:1;text-shadow:0 0 8px rgba(255,170,60,.85);
   transition:transform .6s cubic-bezier(.15,.65,.35,1),opacity .6s linear}
 
-/* ============ KPI ============ */
-.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
-@media(max-width:720px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
-.kpi{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow)}
-.kpi .label{font-size:12px;color:var(--sub)}
-.kpi .value{font-size:25px;font-weight:800;margin-top:6px}
-.kpi .value.pos{color:var(--pos)} .kpi .value.neg{color:var(--neg)}
-.kpi .sub{font-size:11px;color:var(--faint);margin-top:4px}
+/* ============ 统计页：主卡 / 磁贴 / 发散排行 ============ */
+.stat-filter{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.hero-card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:18px;
+  padding:13px 16px 12px;margin-bottom:12px;box-shadow:var(--shadow);text-align:center}
+.hero-top{display:flex;justify-content:space-between;align-items:center}
+.hero-lb{font-size:11px;color:var(--sub);letter-spacing:.22em;font-weight:700}
+.delta{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--faint)}
+.delta.pos{color:var(--pos)} .delta.neg{color:var(--neg)}
+.hero-num{font-size:46px;font-weight:900;line-height:1.3;margin-top:2px}
+.hero-num.pos{color:var(--pos)} .hero-num.neg{color:var(--neg)}
+.hero-sub{font-size:12px;color:var(--sub);margin-top:1px}
+.hero-sub2{font-size:10.5px;color:var(--faint);margin-top:4px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 12px 11px;
+  box-shadow:var(--shadow);text-align:left;display:block;width:100%}
+.tile .label{font-size:11px;color:var(--sub);font-weight:600;display:flex;align-items:center;gap:4px}
+.tile .value{font-size:20px;font-weight:800;margin-top:5px}
+.tile .value.pos{color:var(--pos)} .tile .value.neg{color:var(--neg)}
+.tile .sub{font-size:10.5px;color:var(--faint);margin-top:4px;line-height:1.45}
+.tile-link{cursor:pointer;transition:border-color .15s}
+.tile-link:hover{border-color:var(--accent)}
+.meter{height:6px;border-radius:99px;margin-top:8px;overflow:hidden}
+.meter i{display:block;height:100%;border-radius:99px;transition:width .5s cubic-bezier(.3,.9,.3,1)}
+/* 发散排行：零轴按正负最大值动态摆位，正分向右、负分向左 */
+.div-row{display:grid;grid-template-columns:minmax(56px,100px) 1fr 50px;gap:9px;align-items:center;margin-bottom:11px;font-size:13px}
+.div-row:last-child{margin-bottom:2px}
+.div-row .name{color:var(--sub);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.div-row .name i{width:8px;height:8px;border-radius:3px;flex:none}
+.div-row .name svg{color:var(--faint);flex:none}
+.div-track{position:relative;height:14px;background:var(--bg);border-radius:5px}
+.div-track .axis{position:absolute;top:-3px;bottom:-3px;width:1.5px;border-radius:2px;background:rgba(70,56,47,.22)}
+.div-track .bar{position:absolute;top:0;height:14px;min-width:3px}
+.div-track .bar.bar-pos{border-radius:0 4px 4px 0} /* 数据端圆角、基线端直角 */
+.div-track .bar.bar-neg{border-radius:4px 0 0 4px}
+.div-row .val{text-align:right;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.div-row .val.pos{color:var(--pos)} .div-row .val.neg{color:var(--neg)}
 
 /* ============ 面板 ============ */
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
@@ -180,18 +208,19 @@ main{max-width:480px;margin:0 auto;padding:10px 16px calc(120px + env(safe-area-
 .heat-legend{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--faint);margin-top:12px;flex-wrap:wrap}
 .heat-legend .sw{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid var(--line)}
 
-/* ============ 趋势图 / 标签图 ============ */
+/* ============ 趋势图（暖色主题化：网格线/坐标全部走 token） ============ */
 .trend-box svg{display:block;width:100%}
-.bar-p{fill:#2f9e60}
-.bar-n{fill:#d64c5a}
-.bar-hot{filter:brightness(1.12)}
-.tag-row{display:grid;grid-template-columns:minmax(64px,132px) 1fr 64px;gap:10px;align-items:center;margin-bottom:11px;font-size:13px}
-.tag-row .name{color:var(--sub);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
-.tag-row .name i{width:8px;height:8px;border-radius:3px;flex:none}
-.tag-row .name svg{color:var(--faint);flex:none}
-.tag-row .track{position:relative;height:14px;background:var(--bg);border-radius:99px;overflow:hidden}
-.tag-row .bar{position:absolute;left:0;top:0;height:14px;border-radius:99px;min-width:3px}
-.tag-row .val{text-align:right;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.trend-box .gl{stroke:var(--line)}
+.trend-box .bl{stroke:rgba(70,56,47,.28)}
+.trend-box .tk{fill:var(--faint);font-variant-numeric:tabular-nums}
+.trend-box .tk-today{fill:var(--accent-deep);font-weight:700}
+.trend-box .ext{fill:var(--ink);stroke:var(--surface);stroke-width:3px;paint-order:stroke;stroke-linejoin:round}
+/* 皮粉平滑曲线：线 + 零基线面积晕染 + 数据点（表面描边环） */
+.trend-box .curve{fill:none;stroke:var(--skin);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.trend-box .curve-area{fill:var(--skin);opacity:.25;stroke:none}
+.trend-box .dot{fill:var(--skin);stroke:var(--surface);stroke-width:2}
+.trend-box .dot-today{fill:var(--accent-deep)}
+.trend-box .xh{stroke:rgba(70,56,47,.16)}
 .zero-note{color:var(--faint);font-size:13px;padding:8px 0}
 
 /* ============ 数据表 ============ */
@@ -231,11 +260,13 @@ details.table-view summary:hover{color:var(--ink)}
 .dock-bg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
   filter:drop-shadow(0 10px 22px rgba(24,16,12,.16))}
 .dock-bg path{fill:var(--skin);stroke:#e6b3a4;stroke-width:1}
-.dock-tab{position:absolute;top:0;height:100%;width:96px;display:flex;flex-direction:column;align-items:center;
+.dock-tab{position:absolute;top:0;height:100%;width:calc(25% - 38px);display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:3px;color:var(--faint);font-size:11px;font-weight:650;transition:color .15s,transform .12s;
   pointer-events:auto;white-space:nowrap}
-.dock-tab.left{left:6px}
-.dock-tab.right{right:6px}
+.dock-tab.left{left:0}
+.dock-tab.left2{left:calc(25% - 38px)}
+.dock-tab.right2{right:calc(25% - 38px)}
+.dock-tab.right{right:0}
 .dock-tab:active{transform:scale(.94)}
 .dock-tab.active{color:var(--accent-deep)}
 /* 米黄圆球（与纸面同色，白描边+暖影保持立体）；今日页铺开时球随之隐藏 */
@@ -291,6 +322,34 @@ body.quake{animation:quakeA .45s ease-in-out}
 .day-item .st{font-size:11px;color:var(--faint);background:var(--bg);border-radius:99px;padding:2px 8px}
 .day-item .score{margin-left:auto;font-weight:800;font-size:16px}
 .day-item .date-l{font-size:11px;color:var(--faint)}
+
+/* ============ 兑换页（小卖部） ============ */
+.ex-card{position:relative;padding-left:34px;overflow:hidden}
+/* 券票打孔线：竖向虚线，呼应「券」的形态 */
+.ex-card::before{content:'';position:absolute;top:0;bottom:0;left:14px;width:1.5px;
+  background:repeating-linear-gradient(180deg,rgba(70,56,47,.18) 0 5px,transparent 5px 10px)}
+.ex-head{display:flex;align-items:center;gap:11px}
+.ex-ico{width:42px;height:42px;border-radius:13px;background:var(--accent-soft);color:var(--accent-deep);
+  display:flex;align-items:center;justify-content:center;flex:none}
+.ex-info{min-width:0}
+.ex-name{font-size:15.5px;font-weight:800}
+.ex-sub{font-size:11px;color:var(--faint);margin-top:3px}
+.ex-price{margin-left:auto;font-size:18px;font-weight:900;color:var(--accent-deep)}
+.ex-rows{margin-top:12px;padding-top:11px;border-top:1px solid var(--line-soft);
+  font-size:12.5px;color:var(--sub);display:flex;flex-direction:column;gap:6px;line-height:1.6}
+.ex-rows b{color:var(--ink)}
+.ex-cta{margin-top:13px;width:100%}
+.achv-empty{padding:34px 16px;text-align:center}
+.achv-emoji{font-size:40px;line-height:1.4}
+.achv-name{font-size:15.5px;font-weight:800;margin-top:6px}
+.achv-sub{font-size:12px;color:var(--faint);margin-top:5px}
+/* 放假日的今日页 */
+.t-card .num.rest-hero{font-size:40px}
+.rest-quote{background:var(--bg);border-radius:12px;padding:12px 14px;margin:4px 0 12px;font-size:13.5px;line-height:2}
+.rest-quote b{font-weight:800}
+.rest-quote .neg{color:var(--neg)}
+.rest-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--sub);margin-bottom:14px;flex-wrap:wrap}
+.rest-meta-b{font-weight:800;color:var(--ink)}
 
 /* ============ Tooltip & Toast ============ */
 .tip{position:fixed;z-index:200;background:#1c2430;color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;

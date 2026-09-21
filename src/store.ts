@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Checkin, CheckinMap, Project, Tag } from './types';
+import type { Checkin, CheckinMap, Project, RestDay, Tag } from './types';
 import { randInt, uid } from './lib/rng';
 import { todayStr } from './lib/date';
-import { computePendingSettlements, recKey } from './lib/logic';
+import { activeProjects, computePendingSettlements, recKey, restPurchaseState } from './lib/logic';
 import { generateDemoData } from './lib/demo';
 import { TAG_COLOR_FALLBACK, TAG_PALETTE } from './lib/palette';
 import { EMOJI_TO_ICON } from './lib/icons';
@@ -29,6 +29,8 @@ interface Store {
   tags: Tag[];
   projects: Project[];
   checkins: CheckinMap;
+  /** 已兑换的放假日（独立账本：消耗不进每日积分流水） */
+  restDays: RestDay[];
   /** 待展示的日结结算单（静默扣分后的通知） */
   pendingSettleView: SettleItem[] | null;
   /** 音效开关 */
@@ -51,6 +53,8 @@ interface Store {
   /** 静默日结：计算待结算项并直接落账，返回后弹结算单 */
   runSettlement: () => void;
   dismissSettlement: () => void;
+  /** 用积分兑换今天放假：全天 rest、强制免扣分、不断签；当天封盘不可打卡。资格不足返回 null */
+  buyRestDay: () => RestDay | null;
   importAll: (data: unknown) => boolean;
   resetAll: (demo: boolean) => void;
 }
@@ -61,6 +65,7 @@ export const useStore = create<Store>()(
       tags: [],
       projects: [],
       checkins: {},
+      restDays: [],
       pendingSettleView: null,
       soundOn: true,
 
@@ -166,30 +171,74 @@ export const useStore = create<Store>()(
 
       dismissSettlement: () => set({ pendingSettleView: null }),
 
+      buyRestDay: () => {
+        const { projects, checkins, restDays } = get();
+        const today = todayStr();
+        const st = restPurchaseState(projects, checkins, restDays, today);
+        if (!st.canBuy || st.price === null) return null;
+        const entry: RestDay = { ds: today, cost: st.price, ts: Date.now() };
+        set((s) => {
+          const next = { ...s.checkins };
+          const now = Date.now();
+          // 全天封盘：当天所有有效项目盖 rest 记录（日结自动跳过、连续不断签）
+          for (const p of activeProjects(projects, today)) {
+            const cur = next[recKey(p.id, today)];
+            if (cur?.status === 'done' || cur?.status === 'failed') continue; // 资格校验已排除，防御
+            next[recKey(p.id, today)] = { score: 0, status: 'rest', via: 'user', ts: now };
+          }
+          return { checkins: next, restDays: [...s.restDays, entry] };
+        });
+        return entry;
+      },
+
       importAll: (data) => {
         if (typeof data !== 'object' || data === null) return false;
-        const d = data as Partial<{ v: number; tags: Tag[]; projects: Project[]; checkins: CheckinMap }>;
-        if (d.v !== 1 || !Array.isArray(d.tags) || !Array.isArray(d.projects) || typeof d.checkins !== 'object' || d.checkins === null) {
+        const d = data as Partial<{
+          v: number;
+          tags: Tag[];
+          projects: Project[];
+          checkins: CheckinMap;
+          restDays: RestDay[];
+        }>;
+        if (
+          (d.v !== 1 && d.v !== 2) ||
+          !Array.isArray(d.tags) ||
+          !Array.isArray(d.projects) ||
+          typeof d.checkins !== 'object' ||
+          d.checkins === null
+        ) {
           return false;
         }
-        set({ tags: d.tags, projects: d.projects, checkins: d.checkins, pendingSettleView: null });
+        set({
+          tags: d.tags,
+          projects: d.projects,
+          checkins: d.checkins,
+          restDays: Array.isArray(d.restDays) ? d.restDays : [],
+          pendingSettleView: null,
+        });
         return true;
       },
 
       resetAll: (demo) => {
         if (demo) {
           const d = generateDemoData();
-          set({ tags: d.tags, projects: d.projects, checkins: d.checkins, pendingSettleView: null });
+          set({
+            tags: d.tags,
+            projects: d.projects,
+            checkins: d.checkins,
+            restDays: d.restDays,
+            pendingSettleView: null,
+          });
         } else {
-          set({ tags: [], projects: [], checkins: {}, pendingSettleView: null });
+          set({ tags: [], projects: [], checkins: {}, restDays: [], pendingSettleView: null });
         }
       },
     }),
     {
       name: 'gacha-habit-v1',
-      version: 1,
+      version: 2,
       migrate: (persisted) => {
-        // v0 → v1：项目 emoji 迁移为线性图标 key
+        // v0 → v1：项目 emoji 迁移为线性图标 key；v1 → v2：新增放假账本
         const s = persisted as Partial<Store> & { projects?: Project[] };
         if (s && Array.isArray(s.projects)) {
           s.projects = s.projects.map((p) => ({
@@ -197,9 +246,16 @@ export const useStore = create<Store>()(
             icon: p.icon ?? EMOJI_TO_ICON[(p as unknown as { emoji?: string }).emoji ?? ''] ?? 'target',
           }));
         }
+        if (!Array.isArray(s.restDays)) s.restDays = [];
         return s as Store;
       },
-      partialize: (s) => ({ tags: s.tags, projects: s.projects, checkins: s.checkins, soundOn: s.soundOn }),
+      partialize: (s) => ({
+        tags: s.tags,
+        projects: s.projects,
+        checkins: s.checkins,
+        restDays: s.restDays,
+        soundOn: s.soundOn,
+      }),
     },
   ),
 );

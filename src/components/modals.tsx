@@ -1,8 +1,16 @@
 import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import type { SettleItem } from '../store';
-import { fmt, weekdayCN } from '../lib/date';
-import { dayTotal, recKey } from '../lib/logic';
+import { fmt, todayStr, weekdayCN } from '../lib/date';
+import {
+  REST_MONTHLY_LIMIT,
+  REST_MULT,
+  dayTotal,
+  recKey,
+  restBalance,
+  restDaysUsedInMonth,
+  restPurchaseState,
+} from '../lib/logic';
 import { Icon } from './Icon';
 
 /** 基础弹窗：点遮罩可选关闭 */
@@ -61,6 +69,8 @@ export function ConfirmModal({
 export function DayDetailModal({ ds, onClose }: { ds: string; onClose: () => void }) {
   const projects = useStore((s) => s.projects);
   const checkins = useStore((s) => s.checkins);
+  const restDays = useStore((s) => s.restDays);
+  const rest = restDays.find((r) => r.ds === ds);
   const rows = projects
     .filter((p) => p.createdAt <= ds)
     .map((p) => ({ p, r: checkins[recKey(p.id, ds)] }))
@@ -69,7 +79,8 @@ export function DayDetailModal({ ds, onClose }: { ds: string; onClose: () => voi
   return (
     <Modal maxW={380} onClose={onClose}>
       <h3>
-        {ds.slice(5).replace('-', '/')} 星期{weekdayCN(ds)} · 总分 {fmt(dayTotal(checkins, ds))}
+        {ds.slice(5).replace('-', '/')} 星期{weekdayCN(ds)} ·{' '}
+        {rest ? '放假日 🏖' : `总分 ${fmt(dayTotal(checkins, ds))}`}
       </h3>
       {rows.length === 0 && <div className="zero-note">这一天没有记录</div>}
       {rows.map(({ p, r }) => {
@@ -85,6 +96,14 @@ export function DayDetailModal({ ds, onClose }: { ds: string; onClose: () => voi
           </div>
         );
       })}
+      {rest && (
+        <div className="day-item">
+          <span className="dico"><Icon name="ticket" size={15} /></span>
+          <span>放假兑换</span>
+          <span className="st">账本</span>
+          <span className="score neg">−{rest.cost}</span>
+        </div>
+      )}
       <div className="f-foot" style={{ marginTop: 16 }}>
         <button className="btn" style={{ flex: 1 }} onClick={onClose}>
           关闭
@@ -125,6 +144,62 @@ export function SettlementModal({ items, onClose }: { items: SettleItem[]; onClo
       <div className="f-foot" style={{ marginTop: 16 }}>
         <button className="btn primary" style={{ flex: 1 }} onClick={onClose}>
           知道了
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** 兑换放假确认单：摆出定价算式、余额与额度；资格校验在 store.buyRestDay 里兜底 */
+export function RestDayModal({
+  onClose,
+  onBought,
+}: {
+  onClose: () => void;
+  /** 兑换成功后的回调（音效 / toast） */
+  onBought?: () => void;
+}) {
+  const projects = useStore((s) => s.projects);
+  const checkins = useStore((s) => s.checkins);
+  const restDays = useStore((s) => s.restDays);
+  const buyRestDay = useStore((s) => s.buyRestDay);
+  const today = todayStr();
+  const st = restPurchaseState(projects, checkins, restDays, today);
+  const price = st.price ?? 0;
+
+  return (
+    <Modal maxW={360} onClose={onClose}>
+      <h3>兑换放假 🎫</h3>
+      <div className="rest-quote">
+        近 30 天日均活动量 <b>{Math.round(price / REST_MULT)}</b> 分
+        <br />× {REST_MULT} 倍 = 消耗 <b className="neg">−{price}</b> 分
+      </div>
+      <p style={{ fontSize: 12.5, color: 'var(--sub)', lineHeight: 1.8, margin: '0 0 12px' }}>
+        今天所有强制任务免扣分，连续天数不断签。当天封盘：不可打卡、不可认输，兑换后积分不退。
+      </p>
+      <div className="rest-meta">
+        <span>
+          可用余额 <b className="rest-meta-b">{restBalance(checkins, restDays)}</b> 分
+        </span>
+        <span>
+          本月已放假 {restDaysUsedInMonth(restDays, today)}/{REST_MONTHLY_LIMIT} 天
+        </span>
+      </div>
+      <div className="f-foot">
+        <button className="btn" onClick={onClose}>
+          再想想
+        </button>
+        <button
+          className="btn primary"
+          disabled={!st.canBuy}
+          onClick={() => {
+            if (buyRestDay()) {
+              onBought?.();
+              onClose();
+            }
+          }}
+        >
+          {st.canBuy ? '兑换放假' : st.reason}
         </button>
       </div>
     </Modal>

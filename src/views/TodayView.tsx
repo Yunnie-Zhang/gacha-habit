@@ -5,7 +5,15 @@ import { randInt } from '../lib/rng';
 import { CountUp } from '../components/CountUp';
 import { ConfirmModal } from '../components/modals';
 import { Icon } from '../components/Icon';
-import { activeProjects, dayTotal, recKey, rollLabel, scoreFrac, scoreTier, streak } from '../lib/logic';
+import {
+  activeProjects,
+  dayTotal,
+  recKey,
+  rollLabel,
+  scoreFrac,
+  scoreTier,
+  streak,
+} from '../lib/logic';
 import { BAND_NEG, BAND_PALETTE, BAND_REST } from '../lib/palette';
 import { burst, quake, sparkTrail, tipPop } from '../lib/fx';
 import { playPop, playReveal, tick, unlockAudio } from '../lib/sound';
@@ -56,6 +64,7 @@ function decoyScore(p: Project, mode: 'checkin' | 'giveup', score: number): numb
 export function TodayView() {
   const projects = useStore((s) => s.projects);
   const checkins = useStore((s) => s.checkins);
+  const restDays = useStore((s) => s.restDays);
   const commitCheckin = useStore((s) => s.commitCheckin);
   const [confirm, setConfirm] = useState<{ text: string; cb: () => void } | null>(null);
   const [anim, setAnim] = useState<Anim | null>(null);
@@ -74,6 +83,8 @@ export function TodayView() {
   let done = 0;
   for (const p of act) if (checkins[recKey(p.id, ds)]?.status === 'done') done++;
   const recOf = (p: Project) => checkins[recKey(p.id, ds)];
+  // 放假：账本里有今天 → 全天封盘状态（兑换入口在「兑换」页）
+  const isRestDay = restDays.some((r) => r.ds === ds);
   // 卡片颜色按项目顺序从莫兰迪色板取，相邻项目必不同色
   const colorOf = (p: Project) => {
     const i = projects.findIndex((x) => x.id === p.id);
@@ -251,13 +262,23 @@ export function TodayView() {
       <div className="t-sheet-in">
           <div className="t-card">
             <div className="t-grab" aria-hidden="true" />
-            <div className="lb">今日分数</div>
-            <div className="num" ref={heroNumRef}>
-              <CountUp value={total} />
-            </div>
-            <div className="sub">
-              已完成 {done} / {act.length} · 连续 {streak(checkins, ds)} 天 🔥
-            </div>
+            {isRestDay ? (
+              <>
+                <div className="lb">放假中</div>
+                <div className="num rest-hero" ref={heroNumRef}>🏖</div>
+                <div className="sub">今日免扣分 · 连续 {streak(checkins, ds)} 天不断签</div>
+              </>
+            ) : (
+              <>
+                <div className="lb">今日分数</div>
+                <div className="num" ref={heroNumRef}>
+                  <CountUp value={total} />
+                </div>
+                <div className="sub">
+                  已完成 {done} / {act.length} · 连续 {streak(checkins, ds)} 天 🔥
+                </div>
+              </>
+            )}
           </div>
 
           <div className="stack" ref={stackRef}>

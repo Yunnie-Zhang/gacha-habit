@@ -1,11 +1,16 @@
-import type { CheckinMap, Project, Tag } from '../types';
+import type { CheckinMap, Project, RestDay, Tag } from '../types';
 import { todayStr, addDays } from './date';
 import { mulberry32, seededInt, uid } from './rng';
 import { TAG_PALETTE } from './palette';
-import { recKey } from './logic';
+import { recKey, restDayPrice } from './logic';
 
-/** 生成 70 天可复现的演示数据（今日预置 2 条打卡，其余留白可玩） */
-export function generateDemoData(): { tags: Tag[]; projects: Project[]; checkins: CheckinMap } {
+/** 生成 70 天可复现的演示数据（今日预置 2 条打卡，9 天前 / 2 天前各放假一天，其余留白可玩） */
+export function generateDemoData(): {
+  tags: Tag[];
+  projects: Project[];
+  checkins: CheckinMap;
+  restDays: RestDay[];
+} {
   const rng = mulberry32(20260920);
   const mkTag = (name: string, color: string): Tag => ({
     id: uid() + Math.floor(rng() * 1e6).toString(36),
@@ -54,9 +59,17 @@ export function generateDemoData(): { tags: Tag[]; projects: Project[]; checkins
     P('刷手机 < 1 小时', 'phone', [tid('生活')], 0, 120, true, 20, 100),
   ];
   const checkins: CheckinMap = {};
+  const restDays: RestDay[] = [];
   const base = Date.now();
+  const REST_AT = [9, 2]; // 9 天前、2 天前各放假一天
   for (let i = 70; i >= 1; i--) {
     const ds = addDays(todayStr(), -i);
+    if (REST_AT.includes(i)) {
+      for (const p of projects) {
+        checkins[recKey(p.id, ds)] = { score: 0, status: 'rest', via: 'user', ts: base - i * 86400000 };
+      }
+      continue;
+    }
     for (const p of projects) {
       if (rng() < (p.mandatory ? 0.8 : 0.7)) {
         checkins[recKey(p.id, ds)] = {
@@ -78,5 +91,9 @@ export function generateDemoData(): { tags: Tag[]; projects: Project[]; checkins
   const td = todayStr();
   checkins[recKey(projects[1].id, td)] = { score: 87, status: 'done', via: 'user', ts: base };
   checkins[recKey(projects[2].id, td)] = { score: 45, status: 'done', via: 'user', ts: base };
-  return { tags, projects, checkins };
+  const price = restDayPrice(checkins, td);
+  for (const i of REST_AT) {
+    restDays.push({ ds: addDays(td, -i), cost: price, ts: base - i * 86400000 });
+  }
+  return { tags, projects, checkins, restDays };
 }

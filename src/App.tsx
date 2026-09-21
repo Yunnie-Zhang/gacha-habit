@@ -11,9 +11,10 @@ import { Icon } from './components/Icon';
 import { TodayView, enDate } from './views/TodayView';
 import { StatsView } from './views/StatsView';
 import { ProjectsView } from './views/ProjectsView';
+import { AchievementsView, ExchangeView } from './views/ExchangeView';
 import { playCollect, playPop, unlockAudio } from './lib/sound';
 
-type Tab = 'stats' | 'projects';
+type Tab = 'stats' | 'exchange' | 'achv' | 'projects';
 /** today: 今日纸面铺开 · closing: 正在收回球 · closed: 收成球（露出底衬） */
 type Phase = 'open' | 'closing' | 'closed';
 
@@ -311,11 +312,21 @@ export default function App() {
       </header>
 
       <div className="app-body">
-        {/* 底衬：统计 / 管理（同样铺在皮粉页头下的米黄纸面里） */}
+        {/* 底衬：统计 / 兑换 / 成就 / 管理（同样铺在皮粉页头下的米黄纸面里） */}
         {phase !== 'open' && (
           <div className="base-view">
             <div className="base-sheet">
-              <main>{tab === 'stats' ? <StatsView /> : <ProjectsView toast={toast} />}</main>
+              <main>
+                {tab === 'stats' ? (
+                  <StatsView />
+                ) : tab === 'exchange' ? (
+                  <ExchangeView toast={toast} />
+                ) : tab === 'achv' ? (
+                  <AchievementsView />
+                ) : (
+                  <ProjectsView toast={toast} />
+                )}
+              </main>
             </div>
           </div>
         )}
@@ -351,6 +362,13 @@ export default function App() {
             <span>统计</span>
           </button>
           <button
+            className={`dock-tab left2${phase !== 'open' && tab === 'exchange' ? ' active' : ''}`}
+            onClick={() => switchTab('exchange')}
+          >
+            <Icon name="ticket" size={20} />
+            <span>兑换</span>
+          </button>
+          <button
             ref={ballRef}
             className={`dock-ball${phase === 'open' ? ' open' : ''}`}
             onClick={toggleToday}
@@ -360,6 +378,13 @@ export default function App() {
             tabIndex={phase === 'open' ? -1 : 0}
           >
             <Icon name="cap" size={24} />
+          </button>
+          <button
+            className={`dock-tab right2${phase !== 'open' && tab === 'achv' ? ' active' : ''}`}
+            onClick={() => switchTab('achv')}
+          >
+            <Icon name="star" size={20} />
+            <span>成就</span>
           </button>
           <button
             className={`dock-tab right${phase !== 'open' && tab === 'projects' ? ' active' : ''}`}

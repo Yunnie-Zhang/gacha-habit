@@ -12,7 +12,7 @@ import {
   tagTotals,
 } from '../lib/logic';
 import { addDays, daysInMonth, dsOf, fmt, monthKeyOf, pad, todayStr, weekdayCN } from '../lib/date';
-import { HEAT_NEG, HEAT_POS, TAG_PALETTE } from '../lib/palette';
+import { BAND_PALETTE, HEAT_NEG, HEAT_POS, TAG_COLOR_FALLBACK } from '../lib/palette';
 import { Icon } from './Icon';
 
 /* ============ 热力图（月 / 年双视图，周一开头） ============ */
@@ -248,7 +248,37 @@ export function Heatmap({ onOpenDay }: { onOpenDay: (ds: string) => void }) {
   );
 }
 
-/* ============ 周期趋势（绕零基线双向柱状图） ============ */
+/* ============ 周期趋势（皮粉平滑曲线，绕零基线双向） ============ */
+
+/** 单调三次样条（Fritsch–Carlson，同 d3 curveMonotoneX）：平滑且不在点间过冲 */
+function monotonePath(xs: number[], ys: number[]): string {
+  const n = xs.length;
+  if (n < 2) return '';
+  const dxs: number[] = [];
+  const ms: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    dxs.push(xs[i + 1] - xs[i]);
+    ms.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]));
+  }
+  const ts: number[] = [ms[0]];
+  for (let i = 1; i < n - 1; i++) {
+    if (ms[i - 1] * ms[i] <= 0) {
+      ts.push(0); // 极值点处切线归平，避免过冲
+    } else {
+      const dx0 = dxs[i - 1];
+      const dx1 = dxs[i];
+      const common = dx0 + dx1;
+      ts.push((3 * common) / ((common + dx1) / ms[i - 1] + (common + dx0) / ms[i]));
+    }
+  }
+  ts.push(ms[n - 2]);
+  let d = `M${xs[0]},${ys[0]}`;
+  for (let i = 0; i < n - 1; i++) {
+    const cx = dxs[i] / 3;
+    d += `C${(xs[i] + cx).toFixed(2)},${(ys[i] + ts[i] * cx).toFixed(2)} ${(xs[i + 1] - cx).toFixed(2)},${(ys[i + 1] - ts[i + 1] * cx).toFixed(2)} ${xs[i + 1].toFixed(2)},${ys[i + 1]}`;
+  }
+  return d;
+}
 
 export interface TrendPoint {
   /** 唯一键（日期或月份首日） */
@@ -261,10 +291,17 @@ export interface TrendPoint {
   tip: string;
 }
 
-export function TrendChart({ points }: { points: TrendPoint[] }) {
+export function TrendChart({
+  points,
+  onOpenDay,
+}: {
+  points: TrendPoint[];
+  /** 传入则点击曲线打开该日明细（仅日粒度传） */
+  onOpenDay?: (ds: string) => void;
+}) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(640);
-  const [tip, setTip] = useState<{ p: TrendPoint } | null>(null);
+  const [hov, setHov] = useState<number | null>(null);
 
   useEffect(() => {
     const update = () => {
@@ -303,7 +340,6 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
     return out;
   };
 
-  const bw = Math.min(20, iw * 0.6);
   const showAllLabels = points.length <= 16;
   let best: TrendPoint | null = null;
   let worst: TrendPoint | null = null;
@@ -312,71 +348,69 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
     if (!worst || d.total < worst.total) worst = d;
   }
 
+  const xOf = (i: number) => padL + i * iw + iw / 2;
+  const yOf = (v: number) => (v >= 0 ? y0 - (v / maxPos) * upH : y0 + (-v / maxNeg) * dnH);
+  const xs = points.map((_, i) => xOf(i));
+  const ys = points.map((d) => yOf(d.total));
+  /** 曲线只画到当前进度（key ≤ 今天），未来日期留白不画平线 */
+  const lastIdx = points.reduce((acc, d, i) => (d.key <= todayStr() ? i : acc), -1);
+  const cxs = xs.slice(0, lastIdx + 1);
+  const cys = ys.slice(0, lastIdx + 1);
+  const curve = monotonePath(cxs, cys);
+  const hover = hov !== null && hov <= lastIdx ? points[hov] : null;
+
   const tipLeft = boxRef.current ? boxRef.current.getBoundingClientRect().left + w / 2 - 80 : 0;
   const tipTop = boxRef.current ? boxRef.current.getBoundingClientRect().top - 78 : 0;
 
   return (
-    <div className="trend-box" ref={boxRef} onMouseLeave={() => setTip(null)}>
+    <div className="trend-box" ref={boxRef} onMouseLeave={() => setHov(null)}>
       <svg viewBox={`0 0 ${w} ${H}`} width={w} height={H}>
         {ticks(maxPos, -1).map(({ v, y }) => (
           <g key={`p${v}`}>
-            <line x1={padL} x2={w - padR} y1={y} y2={y} stroke="#242c4e" strokeWidth="1" />
-            <text x={padL - 6} y={y + 3} textAnchor="end" fontSize="10" fill="#7c86a8" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <line className="gl" x1={padL} x2={w - padR} y1={y} y2={y} strokeWidth="1" />
+            <text className="tk" x={padL - 6} y={y + 3} textAnchor="end" fontSize="10" style={{ fontVariantNumeric: 'tabular-nums' }}>
               +{v}
             </text>
           </g>
         ))}
         {ticks(maxNeg, 1).map(({ v, y }) => (
           <g key={`n${v}`}>
-            <line x1={padL} x2={w - padR} y1={y} y2={y} stroke="#242c4e" strokeWidth="1" />
-            <text x={padL - 6} y={y + 3} textAnchor="end" fontSize="10" fill="#7c86a8" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <line className="gl" x1={padL} x2={w - padR} y1={y} y2={y} strokeWidth="1" />
+            <text className="tk" x={padL - 6} y={y + 3} textAnchor="end" fontSize="10" style={{ fontVariantNumeric: 'tabular-nums' }}>
               -{v}
             </text>
           </g>
         ))}
-        <line x1={padL} x2={w - padR} y1={y0} y2={y0} stroke="#3a4570" strokeWidth="1" />
+        <line className="bl" x1={padL} x2={w - padR} y1={y0} y2={y0} strokeWidth="1" />
+
+        {/* 皮粉曲线 + 相对零基线的面积晕染（止于今天，未来留白） */}
+        {curve && (
+          <path className="curve-area" d={`${curve} L${cxs[cxs.length - 1]},${y0} L${cxs[0]},${y0} Z`} />
+        )}
+        {curve && <path className="curve" d={curve} />}
+        {cxs.length === 1 && <circle className="dot" cx={cxs[0]} cy={cys[0]} r={4} />}
 
         {points.map((d, i) => {
-          const x = padL + i * iw + (iw - bw) / 2;
-          let bar = null;
-          if (d.total > 0) {
-            const h = Math.max(2, (d.total / maxPos) * upH);
-            bar = (
-              <path
-                key={`b${d.key}`}
-                className="bar-p"
-                d={`M${x},${y0} L${x},${y0 - h + 4} Q${x},${y0 - h} ${x + 4},${y0 - h} L${x + bw - 4},${y0 - h} Q${x + bw},${y0 - h} ${x + bw},${y0 - h + 4} L${x + bw},${y0} Z`}
-              />
-            );
-          } else if (d.total < 0) {
-            const h = Math.max(2, (-d.total / maxNeg) * dnH);
-            bar = (
-              <path
-                key={`b${d.key}`}
-                className="bar-n"
-                d={`M${x},${y0} L${x},${y0 + h - 4} Q${x},${y0 + h} ${x + 4},${y0 + h} L${x + bw - 4},${y0 + h} Q${x + bw},${y0 + h} ${x + bw},${y0 + h - 4} L${x + bw},${y0} Z`}
-              />
-            );
-          }
           const showLabel = showAllLabels || i % 5 === 4 || i === points.length - 1;
           return (
             <g key={d.key}>
-              {bar}
               <rect
                 x={padL + i * iw}
                 y={padT}
                 width={iw}
                 height={plotH}
                 fill="transparent"
-                onMouseEnter={() => setTip({ p: d })}
+                style={{ cursor: onOpenDay ? 'pointer' : undefined }}
+                onMouseEnter={i <= lastIdx ? () => setHov(i) : undefined}
+                onClick={onOpenDay && i <= lastIdx ? () => onOpenDay(d.key) : undefined}
               />
               {showLabel && (
                 <text
-                  x={padL + i * iw + iw / 2}
+                  className={`tk${d.key === todayStr() ? ' tk-today' : ''}`}
+                  x={xOf(i)}
                   y={H - 8}
                   textAnchor="middle"
                   fontSize="10"
-                  fill={d.key === todayStr() ? '#fbbf24' : '#7c86a8'}
                 >
                   {d.label}
                 </text>
@@ -385,137 +419,133 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
           );
         })}
 
+        {/* 十字线 + 悬浮点 / 当前进度点 */}
+        {hover && <line className="xh" x1={xOf(hov!)} x2={xOf(hov!)} y1={padT} y2={H - padB} />}
+        {hov !== null && hov <= lastIdx && <circle className="dot" cx={xs[hov]} cy={ys[hov]} r={4} />}
+        {lastIdx >= 0 && <circle className="dot dot-today" cx={xs[lastIdx]} cy={ys[lastIdx]} r={4.5} />}
+
         {best && best.total > 0 && (
-          <ExtLabel p={best} i={points.indexOf(best)} n={points.length} x0={padL} iw={iw} y0={y0} maxPos={maxPos} maxNeg={maxNeg} upH={upH} dnH={dnH} />
+          <text
+            className="ext"
+            x={xOf(points.indexOf(best))}
+            y={Math.max(yOf(best.total) - 10, 11)}
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="700"
+          >
+            {fmt(best.total)}
+          </text>
         )}
         {worst && worst.total < 0 && (
-          <ExtLabel p={worst} i={points.indexOf(worst)} n={points.length} x0={padL} iw={iw} y0={y0} maxPos={maxPos} maxNeg={maxNeg} upH={upH} dnH={dnH} />
+          <text
+            className="ext"
+            x={xOf(points.indexOf(worst))}
+            y={Math.min(yOf(worst.total) + 17, 167)} /* 钳在 x 轴日期带之上 */
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="700"
+          >
+            {fmt(worst.total)}
+          </text>
         )}
         {(!best || best.total <= 0) && (!worst || worst.total >= 0) && (
-          <text x={padL} y={y0 - 8} fontSize="12" fill="#7c86a8">
+          <text className="tk" x={padL} y={y0 - 8} fontSize="12">
             该周期暂无积分记录
           </text>
         )}
       </svg>
-      {tip && (
+      {hover && (
         <div className="tip" style={{ left: tipLeft, top: tipTop, width: 160 }}>
-          <span className="t-date">{tip.p.tip}</span>
-          <span className={`t-val ${tip.p.total > 0 ? 'pos' : tip.p.total < 0 ? 'neg' : ''}`}>
-            {tip.p.total === 0 ? '—' : fmt(tip.p.total)}
+          <span className="t-date">{hover.tip}</span>
+          <span className={`t-val ${hover.total > 0 ? 'pos' : hover.total < 0 ? 'neg' : ''}`}>
+            {hover.total === 0 ? '—' : fmt(hover.total)}
           </span>
-          <span className="t-sub">{tip.p.records} 条记录</span>
+          <span className="t-sub">{hover.records} 条记录</span>
         </div>
       )}
     </div>
   );
 }
 
-function ExtLabel(props: {
-  p: TrendPoint;
-  i: number;
-  n: number;
-  x0: number;
-  iw: number;
-  y0: number;
-  maxPos: number;
-  maxNeg: number;
-  upH: number;
-  dnH: number;
-}) {
-  const { p, i, x0, iw, y0, maxPos, maxNeg, upH, dnH } = props;
-  // 负分标签钳制在 x 轴日期带之上，避免与日期文字重叠
-  const y =
-    p.total > 0
-      ? y0 - (p.total / maxPos) * upH - 6
-      : Math.min(y0 + (Math.abs(p.total) / maxNeg) * dnH + 14, 170);
-  return (
-    <text x={x0 + i * iw + iw / 2} y={y} textAnchor="middle" fontSize="11" fontWeight="700" fill="#eceffb">
-      {fmt(p.total)}
-    </text>
-  );
-}
+/* ============ 得分构成（标签 / 项目发散排行：零轴居中，正分向右、负分向左） ============ */
 
-/* ============ 横向条形行（标签 / 项目共用） ============ */
-
-function HBarRow({
-  name,
-  color,
-  value,
-  maxAbs,
-  ico,
-}: {
+interface CompRow {
+  id: string;
   name: string;
+  /** 实体色：标签用标签色，项目用首页横条卡的莫兰迪色（颜色跟实体走） */
   color: string;
-  value: number;
-  maxAbs: number;
   ico?: string;
-}) {
-  return (
-    <div className="tag-row">
-      <div className="name">
-        {ico ? <Icon name={ico} size={13} /> : <i style={{ background: color }} />}
-        {name}
-      </div>
-      <div className="track">
-        <div
-          className="bar"
-          style={{
-            width: `${Math.max(2, (Math.abs(value) / maxAbs) * 100)}%`,
-            background: color,
-            opacity: value < 0 ? 0.55 : 1,
-          }}
-        />
-      </div>
-      <div className="val">{fmt(value)}</div>
-    </div>
-  );
+  total: number;
 }
 
-export function TagBars({ from, to, title }: { from: string; to: string; title: string }) {
+export function CompositionPanel({ from, to }: { from: string; to: string }) {
   const checkins = useStore((s) => s.checkins);
   const projects = useStore((s) => s.projects);
   const tags = useStore((s) => s.tags);
-  const rows = useMemo(() => tagTotals(projects, checkins, tags, from, to), [projects, checkins, tags, from, to]);
-  const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.total)));
+  const [mode, setMode] = useState<'tag' | 'proj'>('tag');
+
+  const rows: CompRow[] = useMemo(() => {
+    if (mode === 'tag') {
+      return tagTotals(projects, checkins, tags, from, to).map((r) => ({
+        id: r.tag ? r.tag.id : 'none',
+        name: r.tag ? r.tag.name : '无标签',
+        color: r.tag ? r.tag.color : TAG_COLOR_FALLBACK,
+        total: r.total,
+      }));
+    }
+    return projectTotals(projects, checkins, from, to).map((r) => {
+      const i = projects.findIndex((x) => x.id === r.project.id);
+      return {
+        id: r.project.id,
+        name: r.project.name,
+        color: BAND_PALETTE[(i < 0 ? 0 : i) % BAND_PALETTE.length],
+        ico: r.project.icon,
+        total: r.total,
+      };
+    });
+  }, [mode, projects, checkins, tags, from, to]);
+
+  const posMax = Math.max(0, ...rows.map((r) => r.total));
+  const negMax = Math.max(0, ...rows.map((r) => -r.total));
+  const span = posMax + negMax;
+  const zeroPct = span > 0 ? (negMax / span) * 100 : 0;
 
   return (
     <div className="panel">
-      <h3>{title}</h3>
-      {rows.length === 0 && <div className="zero-note">该周期暂无数据</div>}
-      {rows.map((r, i) => (
-        <HBarRow
-          key={r.tag ? r.tag.id : `none${i}`}
-          name={r.tag ? r.tag.name : '无标签'}
-          color={r.tag ? r.tag.color : '#8b93ad'}
-          value={r.total}
-          maxAbs={maxAbs}
-        />
-      ))}
-    </div>
-  );
-}
-
-/** 项目净分排行：单一系列，统一用分类色板 1 号蓝 */
-export function ProjectBars({ from, to, title }: { from: string; to: string; title: string }) {
-  const checkins = useStore((s) => s.checkins);
-  const projects = useStore((s) => s.projects);
-  const rows = useMemo(() => projectTotals(projects, checkins, from, to), [projects, checkins, from, to]);
-  const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.total)));
-
-  return (
-    <div className="panel">
-      <h3>{title}</h3>
-      {rows.length === 0 && <div className="zero-note">该周期暂无数据</div>}
-      {rows.map((r) => (
-        <HBarRow
-          key={r.project.id}
-          name={r.project.name}
-          color={TAG_PALETTE[0]}
-          value={r.total}
-          maxAbs={maxAbs}
-          ico={r.project.icon}
-        />
-      ))}
+      <div className="panel-head">
+        <h3>得分构成</h3>
+        <div className="seg">
+          <button className={mode === 'tag' ? 'sel' : ''} onClick={() => setMode('tag')}>标签</button>
+          <button className={mode === 'proj' ? 'sel' : ''} onClick={() => setMode('proj')}>项目</button>
+        </div>
+      </div>
+      {rows.length === 0 && <div className="zero-note">这一期还是白纸</div>}
+      {rows.map((r) => {
+        const w = span > 0 ? (Math.abs(r.total) / span) * 100 : 0;
+        const pos = r.total >= 0;
+        return (
+          <div className="div-row" key={r.id}>
+            <div className="name">
+              {r.ico ? <Icon name={r.ico} size={13} /> : <i style={{ background: r.color }} />}
+              {r.name}
+            </div>
+            <div className="div-track">
+              <i className="axis" style={{ left: `${zeroPct}%` }} aria-hidden="true" />
+              {r.total !== 0 && (
+                <div
+                  className={`bar ${pos ? 'bar-pos' : 'bar-neg'}`}
+                  style={{
+                    left: pos ? `${zeroPct}%` : `${zeroPct - w}%`,
+                    width: `${Math.max(1.5, w)}%`,
+                    background: r.color,
+                  }}
+                />
+              )}
+            </div>
+            <div className={`val ${r.total > 0 ? 'pos' : r.total < 0 ? 'neg' : ''}`}>{fmt(r.total)}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }
