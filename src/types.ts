@@ -4,12 +4,19 @@ export interface Tag {
   color: string;
 }
 
+/** 打卡频率：每日 / 每周 / 每月 */
+export type Cadence = 'daily' | 'weekly' | 'monthly';
+
 export interface Project {
   id: string;
   name: string;
   /** 线性图标 key（见 lib/icons.ts ICONS） */
   icon: string;
   tagIds: string[];
+  /** 打卡频率（旧数据迁移默认 daily） */
+  cadence: Cadence;
+  /** 每周期需打卡次数（仅 weekly/monthly，缺省 1） */
+  target?: number;
   /** 打卡成功 · 正分区间（整数，min<=max，可相等=固定分） */
   posMin: number;
   posMax: number;
@@ -29,8 +36,10 @@ export type CheckinStatus = 'done' | 'failed' | 'rest';
 export interface Checkin {
   score: number;
   status: CheckinStatus;
-  /** user=打卡/认输，auto=日结 */
+  /** user=打卡/认输，auto=日结/周结/月结 */
   via: 'user' | 'auto';
+  /** 同日多次打卡合并的次数（周/月任务连打），缺省 1 */
+  count?: number;
   ts: number;
 }
 

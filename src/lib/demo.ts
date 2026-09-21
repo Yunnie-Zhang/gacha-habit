@@ -1,8 +1,8 @@
-import type { CheckinMap, Project, RestDay, Tag } from '../types';
-import { todayStr, addDays } from './date';
+import type { Cadence, CheckinMap, Project, RestDay, Tag } from '../types';
+import { todayStr, addDays, monthEndOf, monthStartOf, weekStartOf } from './date';
 import { mulberry32, seededInt, uid } from './rng';
 import { TAG_PALETTE } from './palette';
-import { recKey, restDayPrice } from './logic';
+import { recKey, restDayPrice, targetOf } from './logic';
 
 /** 生成 70 天可复现的演示数据（今日预置 2 条打卡，9 天前 / 2 天前各放假一天，其余留白可玩） */
 export function generateDemoData(): {
@@ -35,11 +35,15 @@ export function generateDemoData(): {
     mandatory: boolean,
     negMin?: number,
     negMax?: number,
+    cadence: Cadence = 'daily',
+    target?: number,
   ): Project => ({
     id: uid() + Math.floor(rng() * 1e6).toString(36),
     name,
     icon: ic,
     tagIds: ids,
+    cadence,
+    target,
     posMin,
     posMax,
     mandatory,
@@ -57,11 +61,15 @@ export function generateDemoData(): {
     P('喝水 8 杯', 'drop', [tid('健康')], 5, 50, false),
     P('写日记', 'pen', [tid('生活')], 10, 80, false),
     P('刷手机 < 1 小时', 'phone', [tid('生活')], 0, 120, true, 20, 100),
+    P('每周复盘', 'clock', [tid('学习'), tid('心态')], 20, 150, true, 30, 120, 'weekly', 1),
+    P('每周运动 3 次', 'heart', [tid('运动')], 10, 100, false, undefined, undefined, 'weekly', 3),
+    P('月度断舍离', 'target', [tid('生活')], 30, 200, false, undefined, undefined, 'monthly', 1),
   ];
   const checkins: CheckinMap = {};
   const restDays: RestDay[] = [];
   const base = Date.now();
   const REST_AT = [9, 2]; // 9 天前、2 天前各放假一天
+  const restSet = new Set(REST_AT.map((i) => addDays(todayStr(), -i)));
   for (let i = 70; i >= 1; i--) {
     const ds = addDays(todayStr(), -i);
     if (REST_AT.includes(i)) {
@@ -71,6 +79,7 @@ export function generateDemoData(): {
       continue;
     }
     for (const p of projects) {
+      if (p.cadence !== 'daily') continue; // 周/月任务按周期生成（见下）
       if (rng() < (p.mandatory ? 0.8 : 0.7)) {
         checkins[recKey(p.id, ds)] = {
           score: seededInt(rng, p.posMin, p.posMax),
@@ -86,6 +95,44 @@ export function generateDemoData(): {
           ts: base - i * 86400000,
         };
       }
+    }
+  }
+  // 周/月任务：按完整周期排布打卡；强制项未达标时在周期末日生成结算失败记录（与结算引擎产出一致）
+  for (const p of projects) {
+    if (p.cadence === 'daily') continue;
+    const target = targetOf(p);
+    let ps = p.cadence === 'weekly' ? weekStartOf(first) : monthStartOf(first);
+    for (;;) {
+      const pe = p.cadence === 'weekly' ? addDays(ps, 6) : monthEndOf(ps);
+      if (pe >= todayStr()) break; // 当前周期进行中，留给用户玩
+      if (ps >= p.createdAt) {
+        const full = rng() < (p.mandatory ? 0.8 : 0.65);
+        const k = full ? target : Math.floor(rng() * target);
+        const days: string[] = [];
+        for (let ds = ps; ds <= pe; ds = addDays(ds, 1)) if (!restSet.has(ds)) days.push(ds);
+        for (let i = 0; i < k && days.length > 0; i++) {
+          const j = i + Math.floor(rng() * (days.length - i));
+          [days[i], days[j]] = [days[j], days[i]];
+          const ds = days[i];
+          checkins[recKey(p.id, ds)] = {
+            score: seededInt(rng, p.posMin, p.posMax),
+            status: 'done',
+            via: 'user',
+            ts: Date.parse(ds + 'T12:00:00'),
+          };
+        }
+        if (p.mandatory && k < target) {
+          let neg = 0;
+          for (let i = 0; i < target - k; i++) neg += seededInt(rng, p.negMin ?? 0, p.negMax ?? 0);
+          checkins[recKey(p.id, pe)] = {
+            score: -neg,
+            status: 'failed',
+            via: 'auto',
+            ts: Date.parse(pe + 'T12:00:00'),
+          };
+        }
+      }
+      ps = addDays(pe, 1);
     }
   }
   const td = todayStr();

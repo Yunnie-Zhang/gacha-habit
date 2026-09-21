@@ -5,6 +5,7 @@ import { fmt, todayStr, weekdayCN } from '../lib/date';
 import {
   REST_MONTHLY_LIMIT,
   REST_MULT,
+  SETTLE_CN,
   dayTotal,
   recKey,
   restBalance,
@@ -84,7 +85,14 @@ export function DayDetailModal({ ds, onClose }: { ds: string; onClose: () => voi
       </h3>
       {rows.length === 0 && <div className="zero-note">这一天没有记录</div>}
       {rows.map(({ p, r }) => {
-        const stText = r!.status === 'done' ? '打卡' : r!.status === 'rest' ? '休息' : r!.via === 'auto' ? '日结' : '认输';
+        const stText =
+          r!.status === 'done'
+            ? '打卡'
+            : r!.status === 'rest'
+              ? '休息'
+              : r!.via === 'auto'
+                ? `${SETTLE_CN[p.cadence] ?? '日结'}`
+                : '认输';
         return (
           <div className="day-item" key={p.id}>
             <span className="dico"><Icon name={p.icon} size={15} /></span>
@@ -113,16 +121,16 @@ export function DayDetailModal({ ds, onClose }: { ds: string; onClose: () => voi
   );
 }
 
-/** 日结结算单：静默扣分后的一次性告知（不打断、无动画） */
+/** 结算单：静默扣分后的一次性告知（不打断、无动画） */
 export function SettlementModal({ items, onClose }: { items: SettleItem[]; onClose: () => void }) {
   const sum = items.reduce((a, b) => a + b.score, 0);
   const dates = [...new Set(items.map((i) => i.date))].sort();
   return (
     <Modal maxW={380} onClose={onClose}>
-      <h3>日结结算单</h3>
+      <h3>结算单</h3>
       <p style={{ fontSize: 12, color: 'var(--muted)', margin: '-8px 0 12px', lineHeight: 1.7 }}>
         {dates.length > 1
-          ? `有 ${dates.length} 天未打开应用，以下强制项目按日静默扣分（追溯至对应日期）。`
+          ? `有 ${dates.length} 天未打开应用，以下强制项目未完成，已静默扣分（追溯至对应日期）。`
           : `以下强制项目未完成，已静默扣分（追溯至对应日期）。`}
       </p>
       {items.map((it, i) => (
@@ -132,7 +140,7 @@ export function SettlementModal({ items, onClose }: { items: SettleItem[]; onClo
             {it.project.name}
             {dates.length > 1 && <span className="date-l"> · {it.date.slice(5).replace('-', '/')}</span>}
           </span>
-          <span className="st">日结</span>
+          <span className="st">{SETTLE_CN[it.project.cadence] ?? '日结'}</span>
           <span className="score neg">{fmt(it.score)}</span>
         </div>
       ))}

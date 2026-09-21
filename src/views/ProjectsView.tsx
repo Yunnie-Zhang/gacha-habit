@@ -75,6 +75,12 @@ export function ProjectsView({ toast }: { toast: (m: string) => void }) {
           <div className="proj-meta">
             <div className="pname">
               {p.name}
+              {p.cadence !== 'daily' && (
+                <span className="badge-force">
+                  {p.cadence === 'weekly' ? '每周' : '每月'}
+                  {(p.target ?? 1) > 1 ? ` ${p.target} 次` : ''}
+                </span>
+              )}
               {p.mandatory && <span className="badge-force">强制</span>}
             </div>
             <div className="ptags">

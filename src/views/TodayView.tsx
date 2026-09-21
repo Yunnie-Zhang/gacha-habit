@@ -1,23 +1,26 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import type { Checkin, Project } from '../types';
+import type { Cadence, Project } from '../types';
 import { useStore } from '../store';
 import { randInt } from '../lib/rng';
 import { CountUp } from '../components/CountUp';
 import { ConfirmModal } from '../components/modals';
 import { Icon } from '../components/Icon';
 import {
+  CADENCE_CN,
+  SETTLE_CN,
   activeProjects,
   dayTotal,
-  recKey,
+  periodView,
   rollLabel,
   scoreFrac,
   scoreTier,
   streak,
+  type PeriodView,
 } from '../lib/logic';
 import { BAND_NEG, BAND_PALETTE, BAND_REST } from '../lib/palette';
 import { burst, quake, sparkTrail, tipPop } from '../lib/fx';
 import { playPop, playReveal, tick, unlockAudio } from '../lib/sound';
-import { todayStr } from '../lib/date';
+import { fmt, todayStr } from '../lib/date';
 
 const GROW_MS = 2200; // 一段生长时长（慢速留悬念：0 → 悬念位）
 const PAUSE_MS = 300; // 长到悬念位后的停顿
@@ -61,13 +64,21 @@ function decoyScore(p: Project, mode: 'checkin' | 'giveup', score: number): numb
   return mode === 'checkin' ? v : -v;
 }
 
+/** 认输扣分：每日任务摇 1 次（周/月任务不设认输，等期末按缺口结算） */
+function giveupScore(p: Project): number {
+  return -randInt(p.negMin ?? 0, p.negMax ?? 0);
+}
+
 export function TodayView() {
   const projects = useStore((s) => s.projects);
   const checkins = useStore((s) => s.checkins);
   const restDays = useStore((s) => s.restDays);
+  const tags = useStore((s) => s.tags);
   const commitCheckin = useStore((s) => s.commitCheckin);
   const [confirm, setConfirm] = useState<{ text: string; cb: () => void } | null>(null);
   const [anim, setAnim] = useState<Anim | null>(null);
+  const [tagSel, setTagSel] = useState<string | null>(null); // 选中的筛选标签 id，null=全部
+  const [cadSel, setCadSel] = useState<'all' | Cadence>('all'); // 选中的频率视图，all=全部
   const [wrapW, setWrapW] = useState(0);
 
   const stackRef = useRef<HTMLDivElement>(null);
@@ -80,20 +91,40 @@ export function TodayView() {
   const ds = todayStr();
   const act = activeProjects(projects, ds);
   const total = dayTotal(checkins, ds);
+  const pvOf = (p: Project) => periodView(p, checkins, ds);
   let done = 0;
-  for (const p of act) if (checkins[recKey(p.id, ds)]?.status === 'done') done++;
-  const recOf = (p: Project) => checkins[recKey(p.id, ds)];
+  for (const p of act) if (pvOf(p).state === 'done') done++;
   // 放假：账本里有今天 → 全天封盘状态（兑换入口在「兑换」页）
   const isRestDay = restDays.some((r) => r.ds === ds);
+  // 标签筛选：只列出今日任务真正用到的标签（按标签保存顺序），避免筛出空列表
+  const usedTags = tags.filter((t) => act.some((p) => p.tagIds.includes(t.id)));
+  // 选中标签可能已失效（删除/归档后不再被今日任务引用）：退回「全部」
+  const effTag = tagSel && usedTags.some((t) => t.id === tagSel) ? tagSel : null;
+  const matchTag = (p: Project) => !effTag || p.tagIds.includes(effTag);
+  // 频率视图：今日任务里实际存在的频率才出胶囊（只有每日任务时不出现该行）
+  const usedCads = (['daily', 'weekly', 'monthly'] as const).filter((c) =>
+    act.some((p) => p.cadence === c),
+  );
+  // 选中频率可能已失效（该频率任务全被归档/删除）：退回「全部」
+  const effCad: 'all' | Cadence = cadSel !== 'all' && usedCads.includes(cadSel) ? cadSel : 'all';
+  const matchCad = (p: Project) => effCad === 'all' || p.cadence === effCad;
   // 卡片颜色按项目顺序从莫兰迪色板取，相邻项目必不同色
   const colorOf = (p: Project) => {
     const i = projects.findIndex((x) => x.id === p.id);
     return BAND_PALETTE[(i < 0 ? 0 : i) % BAND_PALETTE.length];
   };
-  const todo = act.filter((p) => !recOf(p) || recOf(p)!.status === 'rest');
+  const pvScore = (p: Project) => {
+    const pv = pvOf(p);
+    return pv.state === 'failed' ? (pv.failedScore ?? 0) : pv.scoreSum;
+  };
+  // 当前频率 + 标签视图下的列表：先待办（含放假日休息卡）后已完成，完成卡按分数从大到小排
+  const todo = act.filter((p) => {
+    const st = pvOf(p).state;
+    return matchCad(p) && matchTag(p) && (st === 'open' || st === 'rest');
+  });
   const finished = act
-    .filter((p) => recOf(p) && recOf(p)!.status !== 'rest')
-    .sort((a, b) => recOf(b)!.score - recOf(a)!.score); // 完成卡按分数从大到小往下排
+    .filter((p) => matchCad(p) && matchTag(p) && (pvOf(p).state === 'done' || pvOf(p).state === 'failed'))
+    .sort((a, b) => pvScore(b) - pvScore(a));
 
   // 容器宽度（卡片长度按它归一）
   useLayoutEffect(() => {
@@ -141,6 +172,7 @@ export function TodayView() {
         window.setTimeout(() => {
           s.remove();
           flying.current = anim.id;
+          el.style.width = ''; // 清掉动画内联宽度：未达标卡留在待办堆，恢复通栏（已达标卡由 style prop 接管）
           commitCheckin(anim.id, ds, anim.score, anim.mode === 'checkin' ? 'done' : 'failed');
           setAnim(null);
           window.setTimeout(() => {
@@ -247,7 +279,7 @@ export function TodayView() {
     if (anim) return;
     unlockAudio();
     const score =
-      mode === 'checkin' ? randInt(p.posMin, p.posMax) : -randInt(p.negMin ?? 0, p.negMax ?? 0);
+      mode === 'checkin' ? randInt(p.posMin, p.posMax) : giveupScore(p);
     setAnim({ id: p.id, mode, score, decoy: decoyScore(p, mode, score) });
   };
 
@@ -281,17 +313,61 @@ export function TodayView() {
             )}
           </div>
 
+          {usedCads.length > 1 && (
+            <div className="cad-filter">
+              {(['all', ...usedCads] as const).map((c) => (
+                <button
+                  key={c}
+                  className={`chip${effCad === c ? ' sel' : ''}`}
+                  disabled={!!anim}
+                  onClick={() => setCadSel(c)}
+                >
+                  {c === 'all' ? '全部' : CADENCE_CN[c]}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {usedTags.length > 0 && (
+            <div className="tag-filter">
+              <button
+                className={`chip${effTag === null ? ' sel' : ''}`}
+                disabled={!!anim}
+                onClick={() => setTagSel(null)}
+              >
+                全部
+              </button>
+              {usedTags.map((t) => (
+                <button
+                  key={t.id}
+                  className={`chip${effTag === t.id ? ' sel' : ''}`}
+                  disabled={!!anim}
+                  onClick={() => setTagSel(effTag === t.id ? null : t.id)}
+                >
+                  <i style={{ background: t.color }} />
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="stack" ref={stackRef}>
         {todo.length + finished.length === 0 && (
           <div className="empty-note">
-            {projects.length ? '今天没有安排项目' : '还没有项目，去「管理」页新建一个'}
+            {!projects.length
+              ? '还没有项目，去「管理」页新建一个'
+              : effCad !== 'all'
+                ? `暂无${CADENCE_CN[effCad]}任务`
+                : effTag && act.length
+                  ? '该标签下今天暂无任务'
+                  : '今天没有安排项目'}
           </div>
         )}
         {todo.map((p) => (
           <Band
             key={p.id}
             p={p}
-            rec={recOf(p)}
+            pv={pvOf(p)}
             color={colorOf(p)}
             wrapW={wrapW}
             animating={anim?.id === p.id}
@@ -311,7 +387,7 @@ export function TodayView() {
           <Band
             key={p.id}
             p={p}
-            rec={recOf(p)}
+            pv={pvOf(p)}
             color={colorOf(p)}
             wrapW={wrapW}
             animating={false}
@@ -341,7 +417,7 @@ export function TodayView() {
 
 function Band({
   p,
-  rec,
+  pv,
   color,
   wrapW,
   animating,
@@ -352,7 +428,7 @@ function Band({
   onGiveup,
 }: {
   p: Project;
-  rec?: Checkin;
+  pv: PeriodView;
   color: string;
   wrapW: number;
   animating: boolean;
@@ -362,14 +438,19 @@ function Band({
   onCheckin: () => void;
   onGiveup: () => void;
 }) {
-  const isRest = rec?.status === 'rest';
-  const failed = rec?.status === 'failed';
+  const { state, progress, target, scoreSum, failedScore, failedVia } = pv;
+  const multi = target > 1;
+  const isRest = state === 'rest';
+  const failed = state === 'failed';
   // 认输卡在生长动画期间就要右锚定并变黑（从右往左长）
   const neg = failed || (animating && animMode === 'giveup');
   const bg = neg ? BAND_NEG : isRest ? BAND_REST : color;
   const style: CSSProperties = { background: bg };
-  if (rec && !isRest && wrapW > 0) {
-    style.width = bandWidth(p, rec.score, failed ? 'giveup' : 'checkin', wrapW);
+  if (state === 'done' && wrapW > 0) {
+    style.width = bandWidth(p, scoreSum, 'checkin', wrapW);
+  }
+  if (state === 'failed' && wrapW > 0) {
+    style.width = bandWidth(p, failedScore ?? 0, 'giveup', wrapW);
   }
   return (
     <div
@@ -380,18 +461,27 @@ function Band({
       <div className="b-head">
         <Icon name={p.icon} size={15} />
         <span className="b-name">{p.name}</span>
+        {p.cadence !== 'daily' && <span className="b-must">{p.cadence === 'weekly' ? '周' : '月'}</span>}
+        {multi && <span className="b-must">{progress}/{target}</span>}
         {p.mandatory && <span className="b-must">必</span>}
       </div>
-      {!rec && (
+      {state === 'open' && (
         <div className="b-rg">
+          {multi ? `已打卡 ${progress}/${target} · ` : ''}
           +{p.posMin} ~ +{p.posMax}
           {p.mandatory ? ` · 负 -${p.negMin ?? 0} ~ -${p.negMax ?? 0}` : ''}
         </div>
       )}
-      {rec && !isRest && (
+      {state === 'done' && (
         <div className="b-score">
-          <span className="v">{rec.score > 0 ? `+${rec.score}` : rec.score}</span>
-          <span className="lb">{failed && rec.via === 'auto' ? '日结扣分' : rollLabel(p, rec.score)}</span>
+          <span className="v">{fmt(scoreSum)}</span>
+          <span className="lb">{multi ? `${progress}/${target} 次` : rollLabel(p, scoreSum)}</span>
+        </div>
+      )}
+      {state === 'failed' && (
+        <div className="b-score">
+          <span className="v">{fmt(failedScore ?? 0)}</span>
+          <span className="lb">{failedVia === 'auto' ? `${SETTLE_CN[p.cadence]}扣分` : rollLabel(p, failedScore ?? 0)}</span>
         </div>
       )}
       {isRest ? (
@@ -399,9 +489,10 @@ function Band({
           <span className="rest-chip">休 息</span>
         </div>
       ) : (
-        !rec && (
+        state === 'open' && (
           <div className="b-acts">
-            {p.mandatory && (
+            {/* 认输只给每日任务：周/月期间不打就等期末按缺口结算，避免一次认输锁死整期 */}
+            {p.mandatory && p.cadence === 'daily' && (
               <button className="b-link danger" disabled={busy} onClick={onGiveup}>
                 认输
               </button>

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Checkin, CheckinMap, Project, RestDay, Tag } from './types';
+import type { Cadence, Checkin, CheckinMap, Project, RestDay, Tag } from './types';
 import { randInt, uid } from './lib/rng';
 import { todayStr } from './lib/date';
 import { activeProjects, computePendingSettlements, recKey, restPurchaseState } from './lib/logic';
@@ -18,6 +18,9 @@ export interface ProjectInput {
   name: string;
   icon: string;
   tagIds: string[];
+  cadence: Cadence;
+  /** 每周期需打卡次数（仅 weekly/monthly） */
+  target?: number;
   posMin: number;
   posMax: number;
   mandatory: boolean;
@@ -141,9 +144,20 @@ export const useStore = create<Store>()(
       },
 
       commitCheckin: (pid, date, score, status) => {
-        set((s) => ({
-          checkins: { ...s.checkins, [recKey(pid, date)]: { score, status, via: 'user', ts: Date.now() } },
-        }));
+        set((s) => {
+          const k = recKey(pid, date);
+          const prev = s.checkins[k];
+          // 周/月多次任务连打：同日已有 done → 合并次数与分数
+          if (prev && prev.status === 'done' && status === 'done') {
+            return {
+              checkins: {
+                ...s.checkins,
+                [k]: { score: prev.score + score, status: 'done', via: 'user', count: (prev.count ?? 1) + 1, ts: Date.now() },
+              },
+            };
+          }
+          return { checkins: { ...s.checkins, [k]: { score, status, via: 'user', ts: Date.now() } } };
+        });
       },
 
       runSettlement: () => {
@@ -151,13 +165,14 @@ export const useStore = create<Store>()(
         const today = todayStr();
         const pending = computePendingSettlements(projects, checkins, today);
         if (pending.length === 0) return;
-        const items: SettleItem[] = pending.map(({ date, projectId }) => {
+        const items: SettleItem[] = pending.map(({ date, projectId, rolls }) => {
           const project = projects.find((p) => p.id === projectId)!;
-          return {
-            date,
-            project,
-            score: -randInt(project.negMin ?? 0, project.negMax ?? 0),
-          };
+          // 周/月任务按缺口次数逐次摇负分求和；每日任务摇 1 次
+          let neg = 0;
+          for (let i = 0, n = Math.max(1, rolls ?? 1); i < n; i++) {
+            neg += randInt(project.negMin ?? 0, project.negMax ?? 0);
+          }
+          return { date, project, score: -neg };
         });
         set((s) => {
           const next = { ...s.checkins };
@@ -211,7 +226,8 @@ export const useStore = create<Store>()(
         }
         set({
           tags: d.tags,
-          projects: d.projects,
+          // 旧备份没有 cadence/target：归一化为每日任务
+          projects: d.projects.map((p) => ({ ...p, cadence: p.cadence ?? 'daily' })),
           checkins: d.checkins,
           restDays: Array.isArray(d.restDays) ? d.restDays : [],
           pendingSettleView: null,
@@ -236,15 +252,17 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'gacha-habit-v1',
-      version: 3,
+      version: 4,
       migrate: (persisted) => {
         // v0 → v1：项目 emoji 迁移为线性图标 key；v1 → v2：新增放假账本；
-        // v2 → v3：标签色降饱和（莫兰迪化，映射见 TAG_COLOR_MIGRATE）
+        // v2 → v3：标签色降饱和（莫兰迪化，映射见 TAG_COLOR_MIGRATE）；
+        // v3 → v4：新增打卡频率 cadence（旧数据默认每日）
         const s = persisted as Partial<Store> & { projects?: Project[] };
         if (s && Array.isArray(s.projects)) {
           s.projects = s.projects.map((p) => ({
             ...p,
             icon: p.icon ?? EMOJI_TO_ICON[(p as unknown as { emoji?: string }).emoji ?? ''] ?? 'target',
+            cadence: p.cadence ?? 'daily',
           }));
         }
         if (s && Array.isArray(s.tags)) {

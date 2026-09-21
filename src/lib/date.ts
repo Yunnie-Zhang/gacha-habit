@@ -37,3 +37,25 @@ export function daysInMonth(y: number, m: number): number {
 export function monthKeyOf(ds: string): string {
   return ds.slice(0, 7);
 }
+
+/** 周起点（周一）：与统计页 periodRange 的周定义一致 */
+export function weekStartOf(ds: string): string {
+  const t = new Date(ds + 'T12:00:00');
+  return addDays(ds, -((t.getDay() + 6) % 7));
+}
+
+/** 周终点（周日） */
+export function weekEndOf(ds: string): string {
+  return addDays(weekStartOf(ds), 6);
+}
+
+/** 月起点（1 号） */
+export function monthStartOf(ds: string): string {
+  return ds.slice(0, 8) + '01';
+}
+
+/** 月终点（月末最后一天） */
+export function monthEndOf(ds: string): string {
+  const [y, m] = ds.split('-').map(Number);
+  return dstr(new Date(y, m, 0));
+}

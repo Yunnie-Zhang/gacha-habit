@@ -1,11 +1,78 @@
-import type { CheckinMap, Project, RestDay, Tag } from '../types';
-import { addDays, dstr, dsOf } from './date';
+import type { Cadence, Checkin, CheckinMap, Project, RestDay, Tag } from '../types';
+import { addDays, dstr, dsOf, monthEndOf, monthStartOf, weekEndOf, weekStartOf } from './date';
 
 export const recKey = (pid: string, ds: string) => `${pid}|${ds}`;
+
+export const CADENCE_CN: Record<Cadence, string> = { daily: '每日', weekly: '每周', monthly: '每月' };
+
+/** 自动结算文案（结算单/明细/卡片用） */
+export const SETTLE_CN: Record<Cadence, string> = { daily: '日结', weekly: '周结', monthly: '月结' };
+
+/** 项目每周期目标次数（daily 恒为 1） */
+export function targetOf(p: Project): number {
+  return p.cadence === 'daily' ? 1 : Math.max(1, p.target ?? 1);
+}
 
 /** 当天可操作的项目（未归档且已创建） */
 export function activeProjects(projects: Project[], ds: string): Project[] {
   return projects.filter((p) => !p.archived && p.createdAt <= ds);
+}
+
+/** 周期内打卡进度：done 按次数累计，failed 取首条（周/月任务展示与结算共用） */
+function periodScan(
+  p: Project,
+  checkins: CheckinMap,
+  from: string,
+  to: string,
+): { progress: number; scoreSum: number; failed?: Checkin } {
+  let progress = 0;
+  let scoreSum = 0;
+  let failed: Checkin | undefined;
+  for (let ds = from; ; ds = addDays(ds, 1)) {
+    const r = checkins[recKey(p.id, ds)];
+    if (r) {
+      if (r.status === 'done') {
+        progress += r.count ?? 1;
+        scoreSum += r.score;
+      } else if (r.status === 'failed' && !failed) {
+        failed = r;
+      }
+    }
+    if (ds >= to) break;
+  }
+  return { progress, scoreSum, failed };
+}
+
+export interface PeriodView {
+  /** open=待打卡 done=本期已达标 failed=已认输/已结算 rest=放假日封盘 */
+  state: 'open' | 'done' | 'failed' | 'rest';
+  progress: number;
+  target: number;
+  /** 周期内 done 分数合计（完成卡展示/宽度用） */
+  scoreSum: number;
+  failedScore?: number;
+  failedVia?: 'user' | 'auto';
+}
+
+/** 周期视角的项目状态：每日=当天记录；每周/每月=本周期内打卡进度是否达标 */
+export function periodView(p: Project, checkins: CheckinMap, ds: string): PeriodView {
+  const target = targetOf(p);
+  if (p.cadence === 'daily') {
+    const r = checkins[recKey(p.id, ds)];
+    if (!r) return { state: 'open', progress: 0, target, scoreSum: 0 };
+    if (r.status === 'done') return { state: 'done', progress: 1, target, scoreSum: r.score };
+    if (r.status === 'failed')
+      return { state: 'failed', progress: 0, target, scoreSum: 0, failedScore: r.score, failedVia: r.via };
+    return { state: 'rest', progress: 0, target, scoreSum: 0 };
+  }
+  const start = p.cadence === 'weekly' ? weekStartOf(ds) : monthStartOf(ds);
+  const { progress, scoreSum, failed } = periodScan(p, checkins, start, ds);
+  if (failed)
+    return { state: 'failed', progress, target, scoreSum, failedScore: failed.score, failedVia: failed.via };
+  if (progress >= target) return { state: 'done', progress, target, scoreSum };
+  // 本期未定：当天盖了休息记录（放假日封盘）→ 按 rest 展示
+  if (checkins[recKey(p.id, ds)]?.status === 'rest') return { state: 'rest', progress, target, scoreSum };
+  return { state: 'open', progress, target, scoreSum };
 }
 
 export function dayTotal(checkins: CheckinMap, ds: string): number {
@@ -119,6 +186,8 @@ export function scoreTier(p: Project, score: number): ScoreTier {
 export interface PendingSettlement {
   date: string;
   projectId: string;
+  /** 周/月任务按缺口次数摇负分（缺省 1 次） */
+  rolls?: number;
 }
 
 /** 卡片生长长度归一：0(最短)~1(横贯全宽)，打卡与认输各自按区间归一 */
@@ -150,8 +219,10 @@ export function rollLabel(p: Project, score: number): string {
 }
 
 /**
- * 待日结清单：minDate ~ 昨天里，强制且当时有效、既没打卡也没休息的记录。
- * 按设计日结为静默扣分，此处只算账，不打分。
+ * 待结算清单：minDate ~ 昨天里，强制且当时有效的未完成项。
+ * 每日任务按天；每周/每月任务只在周期结束日（周日/月末）按缺口结算，
+ * 不完整的首周期不结算，结算日当天已有记录（含放假）免罚。
+ * 按设计结算为静默扣分，此处只算账，不打分。
  */
 export function computePendingSettlements(
   projects: Project[],
@@ -165,7 +236,25 @@ export function computePendingSettlements(
       if (!p.mandatory) continue;
       if (p.createdAt > ds) continue;
       if (p.archivedAt && p.archivedAt <= ds) continue;
-      if (!checkins[recKey(p.id, ds)]) out.push({ date: ds, projectId: p.id });
+      if (p.cadence === 'weekly') {
+        if (ds !== weekEndOf(ds)) continue; // 只在周日结算
+        const ws = weekStartOf(ds);
+        if (ws < p.createdAt) continue; // 不完整的首周期免费
+        if (checkins[recKey(p.id, ds)]) continue; // 结算日已有记录（含放假）→ 免罚
+        const { progress } = periodScan(p, checkins, ws, ds);
+        const gap = targetOf(p) - progress;
+        if (gap > 0) out.push({ date: ds, projectId: p.id, rolls: gap });
+      } else if (p.cadence === 'monthly') {
+        if (ds !== monthEndOf(ds)) continue; // 只在月末结算
+        const ms = monthStartOf(ds);
+        if (ms < p.createdAt) continue;
+        if (checkins[recKey(p.id, ds)]) continue;
+        const { progress } = periodScan(p, checkins, ms, ds);
+        const gap = targetOf(p) - progress;
+        if (gap > 0) out.push({ date: ds, projectId: p.id, rolls: gap });
+      } else {
+        if (!checkins[recKey(p.id, ds)]) out.push({ date: ds, projectId: p.id });
+      }
     }
   }
   return out;
@@ -219,7 +308,8 @@ export interface PeriodStats {
   best: { ds: string; v: number } | null;
 }
 
-/** 任意周期汇总：总分/日均/强制完成率/最佳单日等 */
+/** 任意周期汇总：总分/日均/强制完成率/最佳单日等。
+ *  强制完成率：每日任务按天计；周/月任务按「结束日落在本区间内的完整周期」计。 */
 export function periodStats(
   projects: Project[],
   checkins: CheckinMap,
@@ -243,8 +333,8 @@ export function periodStats(
     }
     for (const p of activeProjects(projects, ds)) {
       const r = checkins[recKey(p.id, ds)];
-      if (r?.status === 'done') doneAll++;
-      if (!p.mandatory) continue;
+      if (r?.status === 'done') doneAll += r.count ?? 1;
+      if (!p.mandatory || p.cadence !== 'daily') continue; // 周/月在下面按周期计
       if (!r) {
         // 今天还没过完，未打卡不算遗漏（日结次日才追溯结算）
         if (ds !== today) miss++;
@@ -252,6 +342,23 @@ export function periodStats(
       else if (r.status === 'failed') mFail++;
     }
   });
+  // 周/月强制项：只统计已结束且被考核的完整周期（进行中的不算）
+  const last = to <= today ? to : today;
+  for (const p of projects) {
+    if (!p.mandatory || p.cadence === 'daily') continue;
+    const target = targetOf(p);
+    for (let ds = from; ds <= last; ds = addDays(ds, 1)) {
+      const pe = p.cadence === 'weekly' ? weekEndOf(ds) : monthEndOf(ds);
+      if (pe !== ds) continue; // 只在周期结束日统计一次
+      if (p.createdAt > pe || (p.archivedAt && p.archivedAt <= pe)) continue;
+      const ps = p.cadence === 'weekly' ? weekStartOf(ds) : monthStartOf(ds);
+      if (ps < p.createdAt) continue; // 不完整的首周期不考核
+      const { progress, failed } = periodScan(p, checkins, ps, pe);
+      if (progress >= target) mDone++;
+      else if (failed) mFail++;
+      else miss++; // 已结束未达标（含待结算/免罚）
+    }
+  }
   const denom = mDone + mFail + miss;
   return {
     total,
