@@ -61,8 +61,8 @@ export function StatsView() {
   const curStreak = streak(checkins, today);
   const longest = useMemo(() => longestStreak(projects, checkins, today), [projects, checkins, today]);
   const mDenom = st.mDone + st.mFail + st.miss;
-  /** 完成率计量条：≥80 绿 / 50–79 橙 / <50 红，轨道用同色浅阶 */
-  const meterColor = st.rate >= 80 ? '#5f8f6b' : st.rate >= 50 ? '#ff8a3d' : '#c96f5e';
+  /** 完成率计量条：≥80 皮粉深阶 / 50–79 琥珀 / <50 赭墨，轨道用同色浅阶 */
+  const meterColor = st.rate >= 80 ? '#c96f5e' : st.rate >= 50 ? '#d9973f' : '#8a4936';
   const rateSub =
     mDenom > 0
       ? `成功 ${st.mDone} · 失败 ${st.mFail} · 遗漏 ${st.miss}`

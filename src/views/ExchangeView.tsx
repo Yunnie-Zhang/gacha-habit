@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { RestDayModal } from '../components/modals';
+import { CountUp } from '../components/CountUp';
 import { Icon } from '../components/Icon';
 import {
   REST_MONTHLY_LIMIT,
@@ -11,7 +12,7 @@ import {
 import { todayStr, weekdayCN } from '../lib/date';
 import { playPop } from '../lib/sound';
 
-/** 兑换页（小卖部）：放假一日是第一个商品，后续货架待补 */
+/** 兑换页（小卖部）：顶部突出积分余额；放假一日是第一个商品，后续货架待补 */
 export function ExchangeView({ toast }: { toast: (m: string) => void }) {
   const projects = useStore((s) => s.projects);
   const checkins = useStore((s) => s.checkins);
@@ -22,12 +23,24 @@ export function ExchangeView({ toast }: { toast: (m: string) => void }) {
   const st = restPurchaseState(projects, checkins, restDays, today);
   const isRestDay = restDays.some((r) => r.ds === today);
   const balance = restBalance(checkins, restDays);
-  const avg = st.price !== null ? Math.round(st.price / 4) : null;
+  const used = restDaysUsedInMonth(restDays, today);
 
   return (
     <section className="view">
       <div className="row-between">
         <h2>兑换</h2>
+      </div>
+
+      {/* 我的积分：页面主角 */}
+      <div className="ex-balance">
+        <span className="ex-bal-ico">
+          <Icon name="star" size={64} />
+        </span>
+        <div className="ex-bal-lb">我的积分</div>
+        <div className="ex-bal-num">
+          <CountUp value={balance} />
+        </div>
+        <div className="ex-bal-sub">本月已放假 {used}/{REST_MONTHLY_LIMIT} 天</div>
       </div>
 
       {/* 商品：放假一日 */}
@@ -41,14 +54,6 @@ export function ExchangeView({ toast }: { toast: (m: string) => void }) {
             <div className="ex-sub">强制免扣分 · 不断签 · 当天封盘</div>
           </div>
           <div className="ex-price">{st.price === null ? '未解锁' : `${st.price} 分`}</div>
-        </div>
-        <div className="ex-rows">
-          <div>
-            定价 <b>{avg ?? '—'}</b> × 4 = 近 30 天日均活动量的 4 倍
-          </div>
-          <div>
-            可用余额 <b>{balance}</b> 分 · 本月已放假 {restDaysUsedInMonth(restDays, today)}/{REST_MONTHLY_LIMIT} 天
-          </div>
         </div>
         <button
           className="btn primary ex-cta"

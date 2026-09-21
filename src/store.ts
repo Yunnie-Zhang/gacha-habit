@@ -5,7 +5,7 @@ import { randInt, uid } from './lib/rng';
 import { todayStr } from './lib/date';
 import { activeProjects, computePendingSettlements, recKey, restPurchaseState } from './lib/logic';
 import { generateDemoData } from './lib/demo';
-import { TAG_COLOR_FALLBACK, TAG_PALETTE } from './lib/palette';
+import { TAG_COLOR_FALLBACK, TAG_COLOR_MIGRATE, TAG_PALETTE } from './lib/palette';
 import { EMOJI_TO_ICON } from './lib/icons';
 
 export interface SettleItem {
@@ -236,15 +236,23 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'gacha-habit-v1',
-      version: 2,
+      version: 3,
       migrate: (persisted) => {
-        // v0 → v1：项目 emoji 迁移为线性图标 key；v1 → v2：新增放假账本
+        // v0 → v1：项目 emoji 迁移为线性图标 key；v1 → v2：新增放假账本；
+        // v2 → v3：标签色降饱和（莫兰迪化，映射见 TAG_COLOR_MIGRATE）
         const s = persisted as Partial<Store> & { projects?: Project[] };
         if (s && Array.isArray(s.projects)) {
           s.projects = s.projects.map((p) => ({
             ...p,
             icon: p.icon ?? EMOJI_TO_ICON[(p as unknown as { emoji?: string }).emoji ?? ''] ?? 'target',
           }));
+        }
+        if (s && Array.isArray(s.tags)) {
+          s.tags = s.tags.map((t) =>
+            t && typeof t.color === 'string'
+              ? { ...t, color: TAG_COLOR_MIGRATE[t.color.toLowerCase()] ?? t.color }
+              : t,
+          );
         }
         if (!Array.isArray(s.restDays)) s.restDays = [];
         return s as Store;
